@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate CI workflow choices that keep Bats execution deterministic."""
+"""Validate CI workflow choices that keep CI dependency setup deterministic."""
 
 from __future__ import annotations
 
@@ -13,9 +13,10 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 # produced noisy tar restore warnings for helper libraries such as bats-assert,
 # bats-detik, bats-file, and bats-support. Cache keys or paths for those
 # helpers are also blocked so a manual actions/cache step cannot restore
-# archives into /usr/lib.
-# The project tests do not load those helpers, so CI should keep using the
-# Ubuntu-packaged bats binary installed by apt.
+# archives into /usr/lib. Deprecated action major versions are blocked so CI
+# does not regress to Node.js 20-backed actions after the repository opts into
+# Node.js 24 execution. The project tests do not load Bats helper libraries, so
+# CI should keep using the Ubuntu-packaged bats binary installed by apt.
 DISALLOWED_TOKENS = (
     "bats-core/bats-action",
     "bats-install:",
@@ -33,6 +34,10 @@ DISALLOWED_TOKENS = (
     "bats-support",
     "Linux-X64-bats-",
     "/usr/lib/bats-",
+    "actions/checkout@v4",
+    "actions/upload-artifact@v4",
+    "actions/cache@",
+    "softprops/action-gh-release@v2",
 )
 
 
@@ -42,7 +47,7 @@ def workflow_files(workflow_dir: Path = WORKFLOW_DIR) -> list[Path]:
 
 
 def find_policy_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
-    """Find workflows that opt into the Bats helper/cache restore path."""
+    """Find workflows that opt into blocked dependency/action setup paths."""
     failures: list[str] = []
     for workflow in workflow_files(workflow_dir):
         content = workflow.read_text(encoding="utf-8")
@@ -68,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("Workflow policy OK: CI uses apt-installed Bats without helper cache restores.")
+    print("Workflow policy OK: CI avoids Bats helper caches and deprecated action setup.")
     return 0
 
 
