@@ -3,6 +3,8 @@
 
 : "${ZCODEX_STATE_HOME:=${HOME}/.local/share/zcodex}"
 : "${ZCODEX_MANIFEST_FILE:=${ZCODEX_STATE_HOME}/manifest.json}"
+: "${ZCODEX_MANIFEST_SCHEMA_VERSION:=2}"
+: "${ZCODEX_INSTALL_RECORDS_FILE:=${ZCODEX_STATE_HOME}/install-records.jsonl}"
 
 manifest_json_escape() {
 	local value="$1"
@@ -101,11 +103,46 @@ manifest_component_status() {
 	fi
 }
 
+manifest_validate_schema() {
+	local manifest="${1:-${ZCODEX_MANIFEST_FILE}}"
+	[[ -r "${manifest}" ]] || return 1
+	if command_exists python3; then
+		python3 - "${manifest}" <<'PYVALIDATE'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    doc = json.load(fh)
+required = ["schema_version", "installer", "platform", "state", "components", "verification_hashes", "runtime"]
+missing = [key for key in required if key not in doc]
+if missing:
+    raise SystemExit(f"missing manifest keys: {','.join(missing)}")
+if int(doc["schema_version"]) < 2:
+    raise SystemExit("schema_version must be >= 2")
+if not isinstance(doc["components"], list):
+    raise SystemExit("components must be a list")
+PYVALIDATE
+		return $?
+	fi
+	grep -q '"schema_version": 2' "${manifest}"
+}
+
+manifest_append_install_record() {
+	local manifest="${1:-${ZCODEX_MANIFEST_FILE}}"
+	local records_file="${2:-${ZCODEX_INSTALL_RECORDS_FILE}}"
+	local digest written_at
+	[[ -r "${manifest}" ]] || return 1
+	install -d -m 700 "$(dirname "${records_file}")"
+	digest="$(sha256sum "${manifest}" | awk '{ print $1 }')"
+	written_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	printf '{"schema_version":1,"written_at":"%s","install_id":"%s","manifest":"%s","sha256":"%s"}\n' "${written_at}" "${ZCODEX_INSTALL_ID:-unknown}" "${manifest}" "${digest}" >>"${records_file}"
+	chmod 600 "${records_file}"
+}
+
 manifest_write() {
 	local status="$1"
 	local node_version npm_version docker_version compose_version codex_version
 	local node_sha npm_sha docker_sha codex_sha manifest_sha
-	local written_at current_phase current_status install_timestamp
+	local written_at current_phase current_status install_timestamp path_digest
 
 	install -d -m 700 "$(dirname "${ZCODEX_MANIFEST_FILE}")"
 	written_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -121,12 +158,14 @@ manifest_write() {
 	npm_sha="$(manifest_sha256_for_command npm || true)"
 	docker_sha="$(manifest_sha256_for_command docker || true)"
 	codex_sha="$(manifest_sha256_for_command codex || true)"
+	path_digest="$(printf '%s' "${PATH:-}" | sha256sum | awk '{ print $1 }')"
 	manifest_sha="$(printf '%s|%s|%s|%s|%s|%s' "${ZCODEX_INSTALLER_VERSION}" "${ZCODEX_NODEJS_VERSION}" "${ZCODEX_DOCKER_PACKAGE_VERSION:-ubuntu-candidate}" "${ZCODEX_CODEX_CLI_VERSION}" "$(platform_arch_normalized)" "${current_phase}" | sha256sum | awk '{ print $1 }')"
 
 	cat >"${ZCODEX_MANIFEST_FILE}.tmp" <<JSON
 {
-  "schema_version": 1,
+  "schema_version": ${ZCODEX_MANIFEST_SCHEMA_VERSION},
   "installer_version": $(manifest_json_string "${ZCODEX_INSTALLER_VERSION}"),
+  "environment_mode": $(manifest_json_string "${ZCODEX_RUNTIME_MODE:-clean-system}"),
   "node_version": $(manifest_json_nullable "${node_version}"),
   "docker_version": $(manifest_json_nullable "${docker_version}"),
   "codex_version": $(manifest_json_nullable "${codex_version}"),
@@ -144,6 +183,7 @@ $(manifest_platform_json | sed '1d;$d')
   },
   "verification_hashes": {
     "manifest_inputs": $(manifest_json_string "${manifest_sha}"),
+    "path": $(manifest_json_string "${path_digest}"),
     "node": $(manifest_json_nullable "${node_sha}"),
     "npm": $(manifest_json_nullable "${npm_sha}"),
     "docker": $(manifest_json_nullable "${docker_sha}"),
@@ -159,6 +199,9 @@ $(manifest_platform_json),
   "state": {
     "phase": $(manifest_json_string "${current_phase}"),
     "status": $(manifest_json_string "${status}")
+  },
+  "runtime": {
+$(nodejs_runtime_audit | awk -F= 'BEGIN { first=1 } { gsub(/\\/, "\\\\", $2); gsub(/"/, "\\\"", $2); printf "%s    \"%s\": \"%s\"", first ? "" : ",\n", $1, $2; first=0 } END { printf "\n" }')
   },
   "components": [
 $(manifest_component_json "nodejs" "${ZCODEX_NODEJS_VERSION}" "${node_version}" "$(manifest_component_status "${node_version}")" "${node_sha}"),
@@ -176,6 +219,8 @@ $(manifest_component_json "codex-cli" "${ZCODEX_CODEX_CLI_VERSION}" "${codex_ver
 }
 JSON
 	chmod 600 "${ZCODEX_MANIFEST_FILE}.tmp"
+	manifest_validate_schema "${ZCODEX_MANIFEST_FILE}.tmp"
 	mv "${ZCODEX_MANIFEST_FILE}.tmp" "${ZCODEX_MANIFEST_FILE}"
+	manifest_append_install_record "${ZCODEX_MANIFEST_FILE}"
 	log_success "Wrote install manifest to ${ZCODEX_MANIFEST_FILE}."
 }

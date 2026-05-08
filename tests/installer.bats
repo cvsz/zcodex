@@ -61,15 +61,15 @@ SH
 	[[ "$output" == *"Skipping network check"* ]]
 }
 
-@test "doctor allows PATH warnings by default" {
+@test "doctor rejects unsafe PATH entries" {
 	local tmpbin
 	tmpbin="$(mktemp -d)"
 	chmod 755 "${tmpbin}"
 	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; WARN_COUNT=0; ERROR_COUNT=0; check_path || true; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	rm -rf "${tmpbin}"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"empty entry"* ]]
-	[[ "$output" == *"ERROR=0 WARN=1"* ]]
+	[[ "$output" == *"empty segment"* ]]
+	[[ "$output" == *"ERROR=1"* ]]
 }
 
 @test "doctor treats docker as optional" {
@@ -218,7 +218,7 @@ SH
 	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/state.sh"; . "${0}/scripts/lib/manifest.sh"; logging_init; state_mark VERIFY_RUNTIME "unit test"; manifest_write running; python3 -m json.tool "${ZCODEX_MANIFEST_FILE}" >/dev/null; cat "${ZCODEX_MANIFEST_FILE}"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *'"schema_version": 1'* ]]
+	[[ "$output" == *'"schema_version": 2'* ]]
 	[[ "$output" == *'"installer_version": "0.2.0"'* ]]
 	[[ "$output" == *'"install_state": {'* ]]
 	[[ "$output" == *'"verification_hashes": {'* ]]
@@ -435,4 +435,40 @@ AUDIT
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_conflict_report "${1}"' "${REPO_ROOT}" "${audit}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"fatal|ci Node.js version v20.1.0 does not satisfy pin 22"* ]]
+}
+
+@test "security PATH validation rejects empty and relative segments" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; PATH="/usr/bin::relative"; security_validate_path "${PATH}"' "${REPO_ROOT}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"PATH contains an empty segment"* ]]
+	[[ "$output" == *"PATH entry is not absolute"* ]]
+}
+
+@test "security PATH canonicalization removes duplicate entries" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_canonicalize_path "/usr/bin:/bin/../bin"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[ "$output" = "/usr/bin" ]
+}
+
+@test "runtime privileged wrapper rejects shadow sudo" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	printf '#!/usr/bin/env bash\nexit 0\n' >"${tmpdir}/sudo"
+	chmod +x "${tmpdir}/sudo"
+	[ "${EUID}" -eq 0 ] && skip "sudo shadow rejection only applies for non-root execution"
+	run env PATH="${tmpdir}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/exec.sh"; logging_init; runtime_privileged true' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Refusing sudo outside trusted system paths"* ]]
+}
+
+@test "manifest schema validation rejects legacy schema" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	cat >"${tmpdir}/manifest.json" <<'JSON'
+{"schema_version":1,"installer":{},"platform":{},"state":{},"components":[],"verification_hashes":{},"runtime":{}}
+JSON
+	run bash -c '. "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/manifest.sh"; manifest_validate_schema "${1}"' "${REPO_ROOT}" "${tmpdir}/manifest.json"
+	rm -rf "${tmpdir}"
+	[ "$status" -ne 0 ]
 }
