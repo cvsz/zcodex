@@ -11,13 +11,17 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 # These tokens identify the third-party Bats helper/cache setup path that has
 # produced noisy tar restore warnings for helper libraries such as bats-assert,
-# bats-detik, and bats-file. The project tests do not load those helpers, so CI
-# should keep using the Ubuntu-packaged bats binary installed by apt.
+# bats-detik, and bats-file. Cache keys or paths for those helpers are also
+# blocked so a manual actions/cache step cannot restore archives into /usr/lib.
+# The project tests do not load those helpers, so CI should keep using the
+# Ubuntu-packaged bats binary installed by apt.
 DISALLOWED_TOKENS = (
     "bats-core/bats-action",
     "bats-assert",
     "bats-detik",
     "bats-file",
+    "Linux-X64-bats-",
+    "/usr/lib/bats-",
 )
 
 
