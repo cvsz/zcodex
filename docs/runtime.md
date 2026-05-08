@@ -50,7 +50,7 @@ Wraps `apt-get update` and deterministic non-interactive package installation af
 
 ## `nodejs.sh`
 
-Installs Node.js/npm through the managed package capability and installs npm global packages.
+Audits Node.js/npm ownership, detects nvm/asdf/apt/NodeSource/distro npm conflicts, checks PATH shadows, enforces runtime modes, installs Node.js/npm through the managed package capability when safe, and installs npm global packages only when ownership policy allows it. See [`runtime-ownership.md`](runtime-ownership.md) for the architecture, conflict matrix, and migration guidance.
 
 ## `docker.sh`
 
