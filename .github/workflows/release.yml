@@ -10,13 +10,50 @@ on:
         description: Git ref to archive for a dry-run release build
         required: false
         default: HEAD
+      mode:
+        description: Codex release orchestrator mode to validate before packaging
+        required: true
+        type: choice
+        default: release
+        options:
+          - basic
+          - full
+          - ultimate
+          - orchestrator
+          - release
+      installer_args:
+        description: Extra arguments forwarded to codex.sh for manual dry-run validation
+        required: false
+        default: '--dry-run --skip-docker --skip-optional'
+      strict_doctor:
+        description: Fail the orchestrator doctor when warnings are found
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release:
+    name: Build and publish release artifacts
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
+      ZCODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
+      RELEASE_REF: ${{ github.event.inputs.ref || 'HEAD' }}
+      RELEASE_MODE: ${{ github.event.inputs.mode || 'release' }}
+      RELEASE_INSTALLER_ARGS: ${{ github.event.inputs.installer_args || '--dry-run --skip-docker --skip-optional' }}
+      STRICT: ${{ github.event.inputs.strict_doctor == 'true' && '1' || '0' }}
 
     steps:
       - name: Check out source
@@ -26,27 +63,82 @@ jobs:
 
       - name: Install release validation tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli; then
+              break
+            fi
+            if [[ "${attempt}" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+
+      - name: Validate release runtime environment
+        run: |
+          set -euo pipefail
+          echo "[Codex] Validating environment..." | tee -a "${CODEX_RELEASE_LOG}"
+          command -v bash >/dev/null 2>&1 || { echo "bash not installed. Aborting." >&2; exit 1; }
+          command -v git >/dev/null 2>&1 || { echo "git not installed. Aborting." >&2; exit 1; }
+          command -v curl >/dev/null 2>&1 || { echo "curl not installed. Aborting." >&2; exit 1; }
+          command -v docker >/dev/null 2>&1 || { echo "Docker not installed. Aborting." >&2; exit 1; }
+          command -v node >/dev/null 2>&1 || { echo "Node.js not installed. Aborting." >&2; exit 1; }
+          command -v kubectl >/dev/null 2>&1 || echo "[Codex] Warning: Kubernetes not found, skipping cluster orchestration." | tee -a "${CODEX_RELEASE_LOG}"
+          docker --version | tee -a "${CODEX_RELEASE_LOG}"
+          node --version | tee -a "${CODEX_RELEASE_LOG}"
 
       - name: Validate tag and VERSION
         if: github.event_name == 'push'
         run: |
+          set -euo pipefail
           expected_tag="v$(tr -d '[:space:]' < VERSION)"
           test "${GITHUB_REF_NAME}" = "${expected_tag}"
 
       - name: Validate environment, shellcheck, shfmt, and Bats
         run: make validate
 
+      - name: Run Codex release orchestrator
+        run: |
+          set -euo pipefail
+          case "${RELEASE_MODE}" in
+            basic|full|ultimate|orchestrator|release) ;;
+            *)
+              echo "Usage: codex.sh {basic|full|ultimate|orchestrator|release}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "[Codex] Running ${RELEASE_MODE} release validation..." | tee -a "${CODEX_RELEASE_LOG}"
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            CI=true ./codex.sh release --dry-run --skip-docker --skip-optional
+          elif [[ "${RELEASE_MODE}" == "orchestrator" ]]; then
+            CI=true ./codex.sh "${RELEASE_MODE}" --offline
+          else
+            read -r -a codex_args <<<"${RELEASE_INSTALLER_ARGS}"
+            CI=true ./codex.sh "${RELEASE_MODE}" "${codex_args[@]}"
+          fi
+          echo "[Codex] Process finished successfully." | tee -a "${CODEX_RELEASE_LOG}"
+
       - name: Build deterministic release artifacts
         run: |
-          ref="${{ github.event.inputs.ref || 'HEAD' }}"
-          scripts/release.sh --skip-validate --ref "${ref}"
+          set -euo pipefail
+          scripts/release.sh --skip-validate --ref "${RELEASE_REF}"
 
       - name: Verify artifact checksums
         run: |
+          set -euo pipefail
           cd dist
           sha256sum -c SHA256SUMS
+
+      - name: Upload release logs and dry-run artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zcodex-release-${{ github.run_id }}
+          path: |
+            codex_release.log
+            dist/
+          if-no-files-found: ignore
 
       - name: Publish GitHub Release
         if: github.event_name == 'push'
