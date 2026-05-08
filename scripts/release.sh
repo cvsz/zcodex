@@ -4,6 +4,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERSION_FILE="${REPO_ROOT}/VERSION"
 CHANGELOG_FILE="${REPO_ROOT}/CHANGELOG.md"
@@ -12,6 +13,9 @@ SKIP_VALIDATE=0
 CLEAN_OUTPUT=1
 VERSION_OVERRIDE=""
 GIT_REF="HEAD"
+
+# shellcheck source=scripts/lib/dependencies.sh
+. "${LIB_DIR}/dependencies.sh"
 
 usage() {
 	cat <<USAGE
@@ -41,6 +45,7 @@ log() {
 
 fail() {
 	printf '[release] ERROR: %s\n' "$*" >&2
+	printf '%s\n' '[release] HINT: run make validate-env for dependency diagnostics or make deps-dev on Ubuntu to install development tools.' >&2
 	exit 1
 }
 
@@ -72,6 +77,11 @@ validate_release_context() {
 	if [[ -n "${GITHUB_REF_NAME:-}" && "${GITHUB_REF_NAME}" =~ ^v && "${GITHUB_REF_NAME}" != "${tag}" ]]; then
 		fail "release tag ${GITHUB_REF_NAME} does not match VERSION-derived tag ${tag}"
 	fi
+}
+
+validate_environment() {
+	log "Validating release/runtime dependencies before release work"
+	validate_required_tooling || fail "missing release/runtime dependencies"
 }
 
 run_validation() {
@@ -198,6 +208,7 @@ main() {
 	done
 
 	local version
+	validate_environment
 	version="$(read_version)"
 	validate_release_context "${version}"
 	run_validation
