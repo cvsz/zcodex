@@ -23,11 +23,9 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Bats
-        uses: bats-core/bats-action@3.0.1
+      - uses: actions/checkout@v6
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt tar coreutils make gzip python3 python3-tomli
+        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli
       - name: Validate environment
         run: make validate-env
       - name: Bash syntax checks
@@ -40,11 +38,9 @@ jobs:
   release-reproducibility:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Setup Bats
-        uses: bats-core/bats-action@3.0.1
       - name: Install release validation tools
         run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3
       - name: Validate and build reproducible release
@@ -52,7 +48,7 @@ jobs:
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
       - name: Upload release dry-run artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zcodex-release-dry-run
           path: dist/
