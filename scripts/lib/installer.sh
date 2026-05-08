@@ -12,6 +12,7 @@
 : "${INSTALLER_STATE_STARTED:=false}"
 : "${ZCODEX_ROLLBACK_ON_FAILURE:=true}"
 : "${ZCODEX_RUNTIME_MODE:=clean-system}"
+: "${ZCODEX_CI_TRUSTED_PATH:=/usr/sbin:/usr/bin:/sbin:/bin}"
 
 installer_usage() {
 	cat <<USAGE
@@ -83,6 +84,19 @@ Runtime policy:
   mode=${ZCODEX_RUNTIME_MODE}
   user-runtime-mutation=${ZCODEX_ALLOW_USER_RUNTIME_MUTATION}
 MODE
+}
+
+installer_prepare_command_path() {
+	if [[ "${CI_MODE}" == "true" && "${ZCODEX_ALLOW_INSECURE_PATH:-false}" != "true" ]]; then
+		log_warn "CI mode detected; replacing PATH with trusted system directories before validation."
+		export PATH="${ZCODEX_CI_TRUSTED_PATH}"
+	fi
+
+	if [[ "${ZCODEX_ALLOW_INSECURE_PATH:-false}" != "true" ]]; then
+		security_export_canonical_path
+	else
+		log_warn "Skipping strict PATH validation because ZCODEX_ALLOW_INSECURE_PATH=true."
+	fi
 }
 
 installer_cleanup() {
@@ -225,12 +239,8 @@ installer_run() {
 	}
 	log_section "zcodex installer"
 
+	installer_prepare_command_path
 	platform_validate
-	if [[ "${ZCODEX_ALLOW_INSECURE_PATH:-false}" != "true" ]]; then
-		security_export_canonical_path
-	else
-		log_warn "Skipping strict PATH validation because ZCODEX_ALLOW_INSECURE_PATH=true."
-	fi
 	pins_validate
 	installer_planned_steps
 

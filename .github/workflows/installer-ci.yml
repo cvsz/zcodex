@@ -27,7 +27,7 @@ jobs:
       - name: Setup Bats
         uses: bats-core/bats-action@3.0.1
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt tar coreutils make gzip python3
+        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt tar coreutils make gzip python3 python3-tomli
       - name: Validate environment
         run: make validate-env
       - name: Bash syntax checks
