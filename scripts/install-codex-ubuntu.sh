@@ -13,26 +13,8 @@ SKIP_OPTIONAL=false
 DRY_RUN=false
 LOCK_FILE="${LOCK_FILE:-/tmp/zcodex-install.lock}"
 
-# shellcheck source=scripts/lib/logging.sh
-. "${LIB_DIR}/logging.sh"
-# shellcheck source=scripts/lib/retry.sh
-. "${LIB_DIR}/retry.sh"
-# shellcheck source=scripts/lib/platform.sh
-. "${LIB_DIR}/platform.sh"
-# shellcheck source=scripts/lib/security.sh
-. "${LIB_DIR}/security.sh"
-# shellcheck source=scripts/lib/backup.sh
-. "${LIB_DIR}/backup.sh"
-# shellcheck source=scripts/lib/packages.sh
-. "${LIB_DIR}/packages.sh"
-# shellcheck source=scripts/lib/nodejs.sh
-. "${LIB_DIR}/nodejs.sh"
-# shellcheck source=scripts/lib/docker.sh
-. "${LIB_DIR}/docker.sh"
-# shellcheck source=scripts/lib/codex.sh
-. "${LIB_DIR}/codex.sh"
-# shellcheck source=scripts/lib/shell.sh
-. "${LIB_DIR}/shell.sh"
+# shellcheck source=scripts/lib/runtime.sh
+. "${LIB_DIR}/runtime.sh"
 
 usage() {
 	cat <<USAGE

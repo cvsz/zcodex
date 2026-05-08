@@ -10,12 +10,11 @@ LOG_FILE="${LOG_FILE:-/tmp/zcodex-doctor.log}"
 CI_MODE="${CI_MODE:-${CI:-false}}"
 FAILED=0
 OFFLINE_MODE=false
+REPAIR_MODE=false
 NETWORK_URL="${ZCODEX_DOCTOR_NETWORK_URL:-https://registry.npmjs.org/@openai%2fcodex}"
 
-# shellcheck source=scripts/lib/logging.sh
-. "${LIB_DIR}/logging.sh"
-# shellcheck source=scripts/lib/platform.sh
-. "${LIB_DIR}/platform.sh"
+# shellcheck source=scripts/lib/runtime.sh
+. "${LIB_DIR}/runtime.sh"
 
 usage() {
 	cat <<USAGE
@@ -23,6 +22,7 @@ Usage: ${SCRIPT_NAME} [OPTIONS]
 
 Options:
   --offline       Skip outbound network checks for airgapped/proxied systems.
+  --repair        Apply safe local repairs for Codex config and shell setup.
   -h, --help      Show this help message.
 USAGE
 }
@@ -31,6 +31,7 @@ parse_args() {
 	while (($#)); do
 		case "$1" in
 		--offline) OFFLINE_MODE=true ;;
+		--repair) REPAIR_MODE=true ;;
 		-h | --help)
 			usage
 			return 64
@@ -179,6 +180,37 @@ check_network() {
 	return 1
 }
 
+repair_codex_config() {
+	local codex_home="${CODEX_HOME:-${HOME}/.codex}"
+	local config_file="${codex_home}/config.toml"
+
+	if [[ -f "${config_file}" ]]; then
+		chmod 600 "${config_file}" || {
+			log_warn "Could not restrict ${config_file} permissions."
+			record_failure
+			return 1
+		}
+		log_success "Repaired Codex config permissions: ${config_file}"
+		return 0
+	fi
+
+	codex_write_config
+}
+
+repair_shell_profile() {
+	if [[ "${CI_MODE}" == "true" ]]; then
+		log_info "Skipping shell profile repair in CI mode."
+		return 0
+	fi
+	shell_configure_codex
+}
+
+run_repairs() {
+	log_section "zcodex repair"
+	repair_codex_config || true
+	repair_shell_profile || true
+}
+
 check_versions() {
 	if command_exists node; then
 		log_info "node version: $(node --version 2>/dev/null || true)"
@@ -223,6 +255,9 @@ main() {
 		esac
 	}
 	log_section "zcodex doctor"
+	if [[ "${REPAIR_MODE}" == "true" ]]; then
+		run_repairs
+	fi
 	run_checks
 }
 

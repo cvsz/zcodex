@@ -105,3 +105,42 @@ SH
 	[[ "$output" == *"old config"* ]]
 	[[ "$output" == *"model = \"gpt-5-codex\""* ]]
 }
+
+@test "runtime loader exposes modular installer functions" {
+	run bash -c '. "${0}/scripts/lib/runtime.sh"; declare -F platform_validate security_download codex_write_config shell_configure_codex >/dev/null' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+}
+
+@test "checksum verification rejects malformed digests" {
+	local artifact
+	artifact="$(mktemp)"
+	printf 'artifact\n' >"${artifact}"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; security_verify_sha256 "${1}" not-a-sha' "${REPO_ROOT}" "${artifact}"
+	rm -f "${artifact}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Invalid SHA-256"* ]]
+}
+
+@test "manifest checksum verification validates named artifacts" {
+	local tmpdir
+	local artifact
+	local digest
+	tmpdir="$(mktemp -d)"
+	artifact="${tmpdir}/codex.tar.gz"
+	printf 'artifact\n' >"${artifact}"
+	digest="$(sha256sum "${artifact}" | awk '{ print $1 }')"
+	printf '%s  codex.tar.gz\n' "${digest}" >"${tmpdir}/SHA256SUMS"
+
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; security_verify_manifest_entry "${1}" "${2}"' "${REPO_ROOT}" "${tmpdir}/SHA256SUMS" "${artifact}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+}
+
+@test "doctor repair creates missing Codex config" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run env -u CODEX_HOME HOME="${tmpdir}/home" CI=true bash -c '. "${0}/scripts/doctor.sh"; logging_init; FAILED=0; run_repairs; test -f "${HOME}/.codex/config.toml"; stat -c "%a" "${HOME}/.codex/config.toml"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"600"* ]]
+}
