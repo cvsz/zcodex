@@ -21,6 +21,8 @@ LOCK_FILE="${LOCK_FILE:-/tmp/zcodex-install.lock}"
 . "${LIB_DIR}/platform.sh"
 # shellcheck source=scripts/lib/security.sh
 . "${LIB_DIR}/security.sh"
+# shellcheck source=scripts/lib/backup.sh
+. "${LIB_DIR}/backup.sh"
 # shellcheck source=scripts/lib/packages.sh
 . "${LIB_DIR}/packages.sh"
 # shellcheck source=scripts/lib/nodejs.sh
@@ -70,7 +72,7 @@ planned_steps() {
 	cat <<PLAN
 Install flow:
   1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
-  2. Acquire a process lock and secure temporary workspace.
+  2. Acquire a process lock, secure temporary workspace, and backup directory.
   3. Update APT metadata and install base packages.
   4. Install Node.js/npm and the Codex CLI.
   5. Optionally install Docker.
@@ -105,6 +107,7 @@ main() {
 
 	security_acquire_lock "${LOCK_FILE}"
 	security_create_tmpdir >/dev/null
+	backup_init >/dev/null
 
 	packages_update
 	packages_install_base

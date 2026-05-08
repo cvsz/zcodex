@@ -39,3 +39,7 @@ Confirm that npm global binaries are in your `PATH`, then rerun:
 ```bash
 bash scripts/install-codex-ubuntu.sh --skip-docker
 ```
+
+### Restore a backed-up config or shell profile
+
+Find the latest backup directory and copy the saved file back to its original path. For example, if `${HOME}/.codex/config.toml` was overwritten, restore `${HOME}/.zcodex/backups/<timestamp>/<home-path>/.codex/config.toml` to `${HOME}/.codex/config.toml`, then run doctor mode again.

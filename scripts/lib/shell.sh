@@ -6,13 +6,19 @@ shell_append_once() {
 	local marker="$2"
 	local content="$3"
 
+	local file_existed=true
+
 	install -d -m 700 "$(dirname "${file}")"
 	if [[ ! -e "${file}" ]]; then
+		file_existed=false
 		: >"${file}"
 		chmod 600 "${file}"
 	fi
 	if grep -Fq "${marker}" "${file}"; then
 		return 0
+	fi
+	if [[ "${file_existed}" == "true" ]]; then
+		declare -F backup_file >/dev/null && backup_file "${file}"
 	fi
 	{
 		printf '\n%s\n' "${marker}"
