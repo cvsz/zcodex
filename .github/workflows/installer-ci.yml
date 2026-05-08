@@ -39,6 +39,8 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/zcodex-tmp"
           echo "TMPDIR=${RUNNER_TEMP}/zcodex-tmp" >>"${GITHUB_ENV}"
       - name: Install validation tools
+        # Install Bats from Ubuntu packages instead of a helper-library setup
+        # action so CI does not restore unused third-party helper caches.
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -71,6 +73,8 @@ jobs:
           CI=true ./codex.sh basic --dry-run --skip-docker --skip-optional
           CI=true ./codex.sh full --dry-run --skip-docker --skip-optional
           CI=true ./codex.sh orchestrator --offline
+      - name: Enforce workflow dependency policy
+        run: make workflow-policy
       - name: Run tests
         run: make test
       - name: Installer dry run
