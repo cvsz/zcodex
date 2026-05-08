@@ -563,3 +563,25 @@ JSON
 	[[ "${listing}" == *" 0/0 "* ]]
 	[[ "${listing}" == *"1970-01-01"* || "${listing}" == *"1969-12-31"* ]]
 }
+
+@test "workflow policy rejects Bats helper action inputs in yaml workflows" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/workflows"
+	cat >"${tmpdir}/workflows/bats-cache.yaml" <<'YAML'
+name: bad-bats-cache
+jobs:
+  test:
+    steps:
+      - uses: bats-core/bats-action@3.0.1
+        with:
+          support-install: true
+          support-path: /usr/lib/bats-support
+YAML
+
+	run python3 "${REPO_ROOT}/tests/workflow_policy.py" "${tmpdir}/workflows"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"bats-core/bats-action"* ]]
+	[[ "$output" == *"support-install:"* ]]
+}

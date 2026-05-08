@@ -18,6 +18,15 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 # Ubuntu-packaged bats binary installed by apt.
 DISALLOWED_TOKENS = (
     "bats-core/bats-action",
+    "bats-install:",
+    "support-install:",
+    "assert-install:",
+    "detik-install:",
+    "file-install:",
+    "support-path:",
+    "assert-path:",
+    "detik-path:",
+    "file-path:",
     "bats-assert",
     "bats-detik",
     "bats-file",
@@ -27,14 +36,31 @@ DISALLOWED_TOKENS = (
 )
 
 
-def main() -> int:
+def workflow_files(workflow_dir: Path = WORKFLOW_DIR) -> list[Path]:
+    """Return GitHub workflow YAML files regardless of extension spelling."""
+    return sorted({*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml")})
+
+
+def find_policy_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
+    """Find workflows that opt into the Bats helper/cache restore path."""
     failures: list[str] = []
-    for workflow in sorted(WORKFLOW_DIR.glob("*.yml")):
+    for workflow in workflow_files(workflow_dir):
         content = workflow.read_text(encoding="utf-8")
         for token in DISALLOWED_TOKENS:
             if token in content:
-                rel_path = workflow.relative_to(REPO_ROOT)
+                try:
+                    rel_path = workflow.relative_to(REPO_ROOT)
+                except ValueError:
+                    rel_path = workflow
                 failures.append(f"{rel_path}: disallowed Bats cache/helper token: {token}")
+
+    return failures
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    workflow_dir = Path(args[0]) if args else WORKFLOW_DIR
+    failures = find_policy_violations(workflow_dir)
 
     if failures:
         print("Workflow policy violations found:", file=sys.stderr)
