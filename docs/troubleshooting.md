@@ -40,7 +40,12 @@ or `/usr/lib/bats-*`, because those archives can try to extract outside the
 workspace on GitHub-hosted runners or into privileged system directories such
 as `/usr/lib`. The current Bats tests load only
 `tests/test_helper.bash`, so restoring helper-library caches is unnecessary and
-can turn a cache hit into noisy `/usr/bin/tar` permission warnings.
+can turn a cache hit into noisy `/usr/bin/tar` permission warnings. This policy
+scans both `.yml` and `.yaml` workflow files and also rejects the helper action
+inputs (`support-install`, `assert-install`, `detik-install`, `file-install`,
+and their `*-path` variants), not just the action name, so renamed or manually
+expanded workflow snippets cannot reintroduce privileged `/usr/lib/bats-*`
+cache restores.
 
 ### Unsupported OS
 
