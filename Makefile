@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check test doctor validate ci-local release release-checksum release-reproducible
+.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test doctor validate ci-local release release-checksum release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -26,13 +26,16 @@ fmt:
 fmt-check:
 	shfmt -d codex.sh scripts tests
 
+workflow-policy:
+	python3 tests/workflow_policy.py
+
 test:
 	bats tests
 
 doctor:
 	bash scripts/doctor.sh
 
-validate: validate-env lint fmt-check test
+validate: validate-env lint fmt-check workflow-policy test
 
 ci-local: validate
 	bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional

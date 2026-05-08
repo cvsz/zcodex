@@ -26,6 +26,17 @@ bash scripts/doctor.sh --repair
 
 ## Common issues
 
+
+### GitHub Actions Bats cache restore warnings
+
+If a workflow emits tar restore warnings for cache keys such as
+`Linux-X64-bats-assert-*`, `Linux-X64-bats-detik-*`, or
+`Linux-X64-bats-file-*`, remove the third-party Bats helper setup path and use
+the repository workflow pattern instead: install `bats` from the Ubuntu package
+manager and run `make workflow-policy` before `make test`. The current Bats
+tests load only `tests/test_helper.bash`, so restoring helper-library caches is
+unnecessary and can turn a missing cache into noisy `/usr/bin/tar` warnings.
+
 ### Unsupported OS
 
 The installer supports Ubuntu 22.04 and 24.04 on `x86_64`, `aarch64`, or `arm64`. Use a supported Ubuntu host or container.
