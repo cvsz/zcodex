@@ -69,7 +69,7 @@ parse_args() {
 planned_steps() {
 	cat <<PLAN
 Install flow:
-  1. Validate Ubuntu release and CPU architecture.
+  1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
   2. Acquire a process lock and secure temporary workspace.
   3. Update APT metadata and install base packages.
   4. Install Node.js/npm and the Codex CLI.

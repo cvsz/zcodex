@@ -6,7 +6,8 @@
 
 - Ubuntu 22.04 LTS
 - Ubuntu 24.04 LTS
-- Architectures: `x86_64`, `aarch64`, `arm64`
+- Architectures: `x86_64`/`amd64`, `aarch64`/`arm64`
+- Runtime awareness: native Ubuntu, WSL, and common container runtimes are detected before installation
 
 ## Repository architecture
 
@@ -53,7 +54,7 @@ bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
 
 The installer performs these steps:
 
-1. Validate Ubuntu release and CPU architecture.
+1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
 2. Acquire an installation lock and secure temporary workspace.
 3. Update APT metadata and install base packages.
 4. Install Node.js/npm and the Codex CLI.
