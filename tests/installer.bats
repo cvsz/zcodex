@@ -122,10 +122,18 @@ SH
 }
 
 @test "example zcodex config is valid TOML" {
-	run python3 -c 'import pathlib, sys, tomllib; data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text()); assert data["installer"]["version"] == "0.2.0"; assert data["runtime"]["nodejs"]["version"] == "22"; assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")' "${REPO_ROOT}/config/zcodex/config.toml"
+	run python3 -c 'import pathlib, sys
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+assert data["installer"]["version"] == "0.2.0"
+assert data["runtime"]["nodejs"]["version"] == "22"
+assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
+' "${REPO_ROOT}/config/zcodex/config.toml"
 	[ "$status" -eq 0 ]
 }
-
 @test "codex_write_config backs up existing config before rewrite" {
 	local tmpdir
 	tmpdir="$(mktemp -d)"
@@ -298,6 +306,17 @@ SH
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"VERIFY"* ]]
+}
+
+@test "installer CI dry-run sanitizes unsafe runner PATH" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	chmod 700 "${tmpdir}"
+	run env CI=true PATH="${tmpdir}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/runtime.sh"; platform_validate() { printf "PATH=%s\n" "${PATH}"; }; pins_validate() { :; }; pins_summary() { :; }; installer_verify_inputs() { :; }; installer_runtime_audit_dry_run() { :; }; installer_run --dry-run --skip-docker --skip-optional' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"CI mode detected; replacing PATH"* ]]
+	[[ "$output" == *"PATH=/usr/sbin:/usr/bin"* ]]
 }
 
 @test "installer parser accepts runtime modes and ci selects ci mode" {

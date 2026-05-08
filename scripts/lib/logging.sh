@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared structured logging helpers.
 
-: "${CI_MODE:=false}"
+: "${CI_MODE:=${CI:-false}}"
 : "${LOG_FILE:=/tmp/zcodex-install.log}"
 
 LOG_COLOR_RED=''
