@@ -92,6 +92,21 @@ SH
 	[[ "$output" == *"make deps-dev"* ]]
 }
 
+@test "dependency descriptions include release tooling" {
+	run bash -c '. "${0}/scripts/lib/dependencies.sh"; dependency_command_description bats; dependency_install_hint bats' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Bats test runner"* ]]
+	[[ "$output" == *"sudo apt install bats"* ]]
+}
+
+@test "doctor reports missing release tooling as warnings" {
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; WARN_COUNT=0; ERROR_COUNT=0; check_release_tooling; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Bats test runner is missing"* ]]
+	[[ "$output" == *"make deps-dev"* ]]
+	[[ "$output" == *"ERROR=0 WARN=5"* ]]
+}
+
 @test "backup_file preserves existing files under backup root" {
 	local tmpdir
 	local source_file

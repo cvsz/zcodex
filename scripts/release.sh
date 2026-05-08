@@ -82,6 +82,10 @@ validate_release_context() {
 validate_environment() {
 	log "Validating release/runtime dependencies before release work"
 	validate_required_tooling || fail "missing release/runtime dependencies"
+	require_command gzip 'gzip compressor' || fail "missing release archive dependency: gzip"
+	if [[ "${SKIP_VALIDATE}" -eq 0 ]]; then
+		require_command make 'make build orchestrator' || fail "missing validation dependency: make"
+	fi
 }
 
 run_validation() {
