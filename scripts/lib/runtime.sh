@@ -28,3 +28,5 @@ ZCODEX_RUNTIME_LIB_DIR="${ZCODEX_RUNTIME_LIB_DIR:-$(runtime_lib_dir)}"
 . "${ZCODEX_RUNTIME_LIB_DIR}/codex.sh"
 # shellcheck source=scripts/lib/shell.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/shell.sh"
+# shellcheck source=scripts/lib/installer.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/installer.sh"

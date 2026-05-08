@@ -4,6 +4,10 @@
 
 Loads the full modular runtime stack for entry points that need installer, security, and repair helpers without duplicating source order.
 
+## `installer.sh`
+
+Owns installer-specific CLI parsing, phase sequencing, dry-run behavior, optional component gates, and trap cleanup so `install-codex-ubuntu.sh` remains a thin entry point.
+
 ## `logging.sh`
 
 Provides timestamped, CI-safe logging with stderr separation and optional terminal colors.

@@ -107,8 +107,14 @@ SH
 }
 
 @test "runtime loader exposes modular installer functions" {
-	run bash -c '. "${0}/scripts/lib/runtime.sh"; declare -F platform_validate security_download codex_write_config shell_configure_codex >/dev/null' "${REPO_ROOT}"
+	run bash -c '. "${0}/scripts/lib/runtime.sh"; declare -F platform_validate security_download codex_write_config shell_configure_codex installer_run installer_install_docker >/dev/null' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
+}
+
+@test "installer parser toggles modular phase flags" {
+	run bash -c '. "${0}/scripts/lib/runtime.sh"; installer_parse_args --ci --dry-run --skip-docker --skip-optional; printf "%s %s %s %s\n" "${CI_MODE}" "${DRY_RUN}" "${SKIP_DOCKER}" "${SKIP_OPTIONAL}"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[ "$output" = "true true true true" ]
 }
 
 @test "checksum verification rejects malformed digests" {
