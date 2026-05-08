@@ -212,6 +212,13 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	[ ! -e "${BATS_TEST_TMPDIR}/missing/ambient.log" ]
 }
 
+@test "release orchestrator CI dry-run treats missing host tools as advisory" {
+	run env -u NVM_DIR CI=true HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release-ci.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Warning: Docker not found"* ]]
+	[[ "$output" == *"Dry run completed without making changes"* ]]
+}
+
 @test "pins validate default deterministic versions" {
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate; pins_summary' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]

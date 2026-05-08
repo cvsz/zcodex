@@ -72,6 +72,10 @@ validate_orchestrator_environment() {
 	if ! runtime_command_exists node; then
 		log "Warning: Node.js not found; installer can install it on supported Ubuntu hosts."
 	fi
+
+	# Dependency discovery is advisory for orchestration; selected modes and
+	# installer flags decide whether a missing optional tool is fatal.
+	return 0
 }
 
 main() {
