@@ -111,6 +111,26 @@ bats tests
 
 CI runs shell syntax checks, shellcheck, a dedicated shfmt formatting workflow, Bats tests, installer dry-run validation, Gitleaks, and Trivy filesystem scanning.
 
+## Releases
+
+zcodex uses semantic versioning and publishes release artifacts from Git tags. The version source of truth is `VERSION`, tags use the `vX.Y.Z` format, and release notes are extracted from `CHANGELOG.md`.
+
+Create a release by tagging the committed tree:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow runs ShellCheck, shfmt, and Bats; builds `zcodex-vX.Y.Z.tar.gz` with deterministic `git archive` plus `gzip -n`; generates `SHA256SUMS`; verifies checksums; and publishes a GitHub Release. Local dry runs use:
+
+```bash
+make release
+make release-checksum
+```
+
+Future release hardening is planned for GPG signatures, cosign blob signatures, SBOM generation, signed tags, and provenance. See `docs/release.md` for the complete release architecture.
+
 ## Troubleshooting
 
 Start with:

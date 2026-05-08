@@ -1,0 +1,65 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to archive for a dry-run release build
+        required: false
+        default: HEAD
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install release validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats shellcheck shfmt
+
+      - name: Validate tag and VERSION
+        if: github.event_name == 'push'
+        run: |
+          expected_tag="v$(tr -d '[:space:]' < VERSION)"
+          test "${GITHUB_REF_NAME}" = "${expected_tag}"
+
+      - name: Run shellcheck, shfmt, and Bats
+        run: make validate
+
+      - name: Build deterministic release artifacts
+        run: |
+          ref="${{ github.event.inputs.ref || 'HEAD' }}"
+          scripts/release.sh --skip-validate --ref "${ref}"
+
+      - name: Verify artifact checksums
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: zcodex ${{ github.ref_name }} — Secure Ubuntu Bootstrap Runtime
+          body_path: dist/RELEASE_NOTES.md
+          files: |
+            dist/zcodex-${{ github.ref_name }}.tar.gz
+            dist/SHA256SUMS
+            dist/SIGNING_INSTRUCTIONS.md
+
+      # Future hardening hooks:
+      # - Generate SBOM: syft dist/zcodex-${{ github.ref_name }}.tar.gz -o spdx-json > dist/zcodex-${{ github.ref_name }}.spdx.json
+      # - Sign checksums with GPG: gpg --armor --detach-sign dist/SHA256SUMS
+      # - Sign checksums with cosign keyless: cosign sign-blob --yes --output-signature dist/SHA256SUMS.sig dist/SHA256SUMS
