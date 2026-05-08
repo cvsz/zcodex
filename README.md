@@ -26,7 +26,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - `logging.sh` for structured CI-safe logs.
 - `retry.sh` for array-based exponential backoff.
 - `pins.sh`, `state.sh`, and `manifest.sh` for deterministic version pins, explicit install phases, and machine-readable install records.
-- `platform.sh` for Ubuntu and architecture validation.
+- `platform.sh` for host facts, architecture validation, and the runtime capability registry (`supports_apt`, `supports_systemd`, `supports_docker`, `supports_rootless`).
 - `runtime.sh` for consistent modular library loading.
 - `installer.sh` for CLI flag parsing, install-phase sequencing, and trap cleanup.
 - `security.sh` for tempfiles, locks, HTTPS downloads, direct checksums, and checksum manifests.
@@ -70,7 +70,7 @@ The orchestrator writes a combined operational log to `codex_release.log` by def
 
 The installer performs these explicit state-machine phases:
 
-1. `VALIDATE`: validate Ubuntu release, CPU architecture, WSL status, container runtime context, and version pins.
+1. `VALIDATE`: validate runtime capabilities, CPU architecture, WSL status, container runtime context, Ubuntu-first support status, and version pins.
 2. `DOWNLOAD`: acquire an installation lock, secure temporary workspace, and rollback backup directory.
 3. `VERIFY`: detect interrupted prior state and revalidate pins.
 4. `INSTALL`: update APT metadata, install base packages, pinned Node.js, pinned Codex CLI, and optional Docker.
@@ -146,7 +146,7 @@ bash scripts/doctor.sh --offline
 bash scripts/doctor.sh --repair
 ```
 
-Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. Repair mode creates or permission-fixes the Codex config and reapplies idempotent shell integration without installing packages. If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
+Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. Repair mode creates or permission-fixes the Codex config and reapplies idempotent shell integration without installing packages. If the installer cannot validate the host, confirm that the architecture is supported and the APT capability is available; Ubuntu 22.04 and 24.04 remain the primary supported targets. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
 
 ## Rollback strategy
 

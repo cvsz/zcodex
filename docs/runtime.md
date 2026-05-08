@@ -18,7 +18,7 @@ Runs commands as arrays and retries them with exponential backoff. It does not e
 
 ## `platform.sh`
 
-Validates Ubuntu releases and supported CPU architectures.
+Provides host facts, validates supported CPU architectures, and owns the runtime capability registry (`supports_apt`, `supports_systemd`, `supports_docker`, and `supports_rootless`). Ubuntu 22.04/24.04 remains the primary target, while non-Ubuntu hosts are accepted only when required capabilities are present and are logged as unsupported best-effort environments.
 
 ## `security.sh`
 
@@ -42,15 +42,15 @@ Creates a per-run backup root and preserves existing user-managed files before t
 
 ## `packages.sh`
 
-Wraps `apt-get update` and deterministic non-interactive package installation.
+Wraps `apt-get update` and deterministic non-interactive package installation after checking `supports_apt`.
 
 ## `nodejs.sh`
 
-Installs Node.js/npm and npm global packages.
+Installs Node.js/npm through the managed package capability and installs npm global packages.
 
 ## `docker.sh`
 
-Installs Docker from Ubuntu repositories and optionally configures user group membership.
+Installs Docker through the managed APT package path, gates service enablement on `supports_systemd`, and optionally configures user group membership.
 
 ## `codex.sh`
 

@@ -18,7 +18,7 @@ Usage: ${SCRIPT_NAME} [OPTIONS]
 
 Options:
   --ci              Non-interactive CI mode; skips shell profile changes.
-  --dry-run         Validate platform and print the planned install flow.
+  --dry-run         Validate runtime capabilities and print the planned install flow.
   --skip-docker     Skip Docker installation and group configuration.
   --skip-optional   Skip optional npm packages.
   -h, --help        Show this help message.
@@ -49,7 +49,7 @@ installer_parse_args() {
 installer_planned_steps() {
 	cat <<PLAN
 Install flow:
-  1. VALIDATE platform, version pins, CPU architecture, WSL status, and container context.
+  1. VALIDATE runtime capabilities, version pins, CPU architecture, WSL status, and container context.
   2. DOWNLOAD package metadata and acquire a process lock, secure workspace, and backup directory.
   3. VERIFY package pins and existing runtime state where possible.
   4. INSTALL base packages, pinned Node.js, pinned Codex CLI, and optional Docker.
@@ -134,7 +134,7 @@ installer_verify_inputs() {
 installer_install_core() {
 	packages_update
 	packages_install_base
-	nodejs_install_ubuntu
+	nodejs_install_managed
 	codex_install_cli
 }
 
@@ -153,7 +153,7 @@ installer_install_docker() {
 		return 0
 	fi
 
-	docker_install_ubuntu
+	docker_install_managed
 	docker_configure_user
 }
 

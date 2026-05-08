@@ -68,7 +68,9 @@ manifest_platform_json() {
     "version_id": $(manifest_json_string "${version_id}"),
     "arch": $(manifest_json_string "$(platform_arch)"),
     "normalized_arch": $(manifest_json_string "$(platform_arch_normalized)"),
-    "container_runtime": $(manifest_json_string "$(platform_container_runtime)")
+    "container_runtime": $(manifest_json_string "$(platform_container_runtime)"),
+    "capabilities":
+$(runtime_capability_json)
   }
 JSON
 }

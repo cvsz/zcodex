@@ -2,11 +2,19 @@
 # APT package helpers.
 
 packages_update() {
+	if ! supports_apt; then
+		log_error "APT capability is required for package metadata updates."
+		return 1
+	fi
 	retry 3 2 sudo apt-get update
 }
 
 packages_install() {
 	local packages=("$@")
+	if ! supports_apt; then
+		log_error "APT capability is required for package installation."
+		return 1
+	fi
 	if ((${#packages[@]} == 0)); then
 		return 0
 	fi
