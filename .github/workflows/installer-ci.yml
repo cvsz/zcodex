@@ -1,0 +1,20 @@
+name: installer-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: Bash syntax checks
+        run: bash -n scripts/*.sh scripts/lib/*.sh tests/*.sh
+      - name: Run tests
+        run: bats tests
+      - name: Installer dry run
+        run: CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
