@@ -10,6 +10,15 @@ zcodex uses a Bash-first release system designed for deterministic, auditable Gi
 - Artifact contract: each release publishes `zcodex-vX.Y.Z.tar.gz` and `SHA256SUMS`.
 - Release notes source: GitHub Release bodies are extracted from the matching changelog section.
 
+## License verification
+
+Every release must include the root `LICENSE` file. The current project license is MIT, and downstream redistributors should verify the canonical license text from the repository root before packaging.
+
+```bash
+test -f LICENSE
+sed -n '1,25p' LICENSE
+```
+
 ## Release flow
 
 ```bash
@@ -61,6 +70,7 @@ Use `--skip-validate` only when validation has already run in the same environme
 - The archive comes from a committed tree, not from mutable workspace state.
 - The workflow grants only `contents: write`, which is required to publish GitHub Releases.
 - Future signing hooks are documented for GPG detached signatures, cosign blob signatures, and SBOM generation once release keys and OIDC policy are finalized.
+- Release maintainers verify that `LICENSE`, `CHANGELOG.md`, `VERSION`, and release notes are present before tagging.
 
 ## Future hardening
 
