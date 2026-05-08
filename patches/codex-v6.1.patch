@@ -1,0 +1,268 @@
+```diff
+diff --git a/scripts/install-codex-ubuntu.sh b/scripts/install-codex-ubuntu.sh
+index v6.0.0..v6.1.0 100755
+--- a/scripts/install-codex-ubuntu.sh
++++ b/scripts/install-codex-ubuntu.sh
+@@
+ set -Eeuo pipefail
+ IFS=$'\n\t'
+ 
++###############################################################################
++# SHELLCHECK
++###############################################################################
++#
++# shellcheck disable=SC2317
++#
++# SC2317:
++# Functions referenced by trap handlers appear unreachable to shellcheck.
++#
++
+ ###############################################################################
+ # CONSTANTS
+ ###############################################################################
+@@
+ readonly OHMYZSH_INSTALL_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
+ 
++TEMP_FILES=()
++
+ # ─────────────────────────────────────────────────────────────────────────────
+ # FLAGS
+ # ─────────────────────────────────────────────────────────────────────────────
+@@
+ retry() {
+-  local retries="${1}"
+-  local delay="${2}"
++  local retries="$1"
++  local delay="$2"
+   shift 2
++
+   local count=0
+ 
+-  until bash -c "$@"; do
++  until "$@"; do
+     local exit_code=$?
++
+     count=$(( count + 1 ))
++
+     if (( count >= retries )); then
+       error "Command failed after ${retries} attempt(s). Last exit: ${exit_code}"
+       return "${exit_code}"
+@@
+   done
+ }
+ 
++retry_pipe() {
++  local retries="$1"
++  local delay="$2"
++  shift 2
++
++  local count=0
++
++  until eval "$*"; do
++    local exit_code=$?
++
++    count=$(( count + 1 ))
++
++    if (( count >= retries )); then
++      error "Pipeline failed after ${retries} attempt(s). Last exit: ${exit_code}"
++      return "${exit_code}"
++    fi
++
++    warn "Pipeline retry ${count}/${retries} in ${delay}s..."
++
++    sleep "${delay}"
++
++    delay=$(( delay * 2 ))
++  done
++}
++
+ # ─────────────────────────────────────────────────────────────────────────────
+ # HELPERS
+ # ─────────────────────────────────────────────────────────────────────────────
+@@
+ apt_install() {
+-  # shellcheck disable=SC2016
+-  retry 3 2 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+-    -o Dpkg::Options::="--force-confnew" '"$*"
++  retry 3 2 \
++    sudo DEBIAN_FRONTEND=noninteractive \
++    apt-get install -y \
++    -o Dpkg::Options::="--force-confnew" \
++    "$@"
+ }
+ 
+-# Secure download: write to a temp file, return its path via stdout.
+-# Caller is responsible for rm -f.
+ secure_download() {
+   local url="$1"
++  local expected_sha="${2:-}"
++
+   local tmpfile; tmpfile="$(mktemp)"
+-  retry 3 2 "curl -fsSL '${url}' -o '${tmpfile}'"
++
++  TEMP_FILES+=("${tmpfile}")
++
++  retry 3 2 curl -fsSL "${url}" -o "${tmpfile}"
++
++  if [[ -n "${expected_sha}" ]]; then
++    echo "${expected_sha}  ${tmpfile}" | sha256sum -c -
++  fi
++
+   echo "${tmpfile}"
+ }
+ 
+@@
+ _acquire_lock() {
+-  if [[ -f "${LOCK_FILE}" ]]; then
+-    local pid; pid="$(cat "${LOCK_FILE}" 2>/dev/null || echo '?')"
+-    error "Another install is running (pid: ${pid}). Remove ${LOCK_FILE} to continue."
++  exec 200>"${LOCK_FILE}"
++
++  if ! flock -n 200; then
++    error "Another install process is already running."
+     exit 1
+   fi
+-  echo "$$" > "${LOCK_FILE}"
++
++  echo "$$" 1>&200
+ }
+ 
+ _release_lock() {
+-  [[ -f "${LOCK_FILE}" ]] && rm -f "${LOCK_FILE}"
++  flock -u 200 2>/dev/null || true
++  rm -f "${LOCK_FILE}" 2>/dev/null || true
+ }
+ 
+ # ─────────────────────────────────────────────────────────────────────────────
+@@
+ _on_exit() {
++  cleanup_keepalive
++  cleanup_tempfiles
++
+   _release_lock
++
+   local elapsed=$(( $(date +%s) - SCRIPT_START_TS ))
+   info "Total elapsed: ${elapsed}s"
+ }
+ 
++cleanup_keepalive() {
++  if [[ -n "${SUDO_KEEPALIVE_PID:-}" ]]; then
++    kill "${SUDO_KEEPALIVE_PID}" 2>/dev/null || true
++  fi
++}
++
++cleanup_tempfiles() {
++  local file
++
++  for file in "${TEMP_FILES[@]:-}"; do
++    [[ -f "${file}" ]] && rm -f "${file}" || true
++  done
++}
++
+ trap '_on_error ${LINENO}' ERR
+ trap '_on_exit'            EXIT
+ 
+@@
+   retry 3 2 "
+-    curl -fsSL '${NODESOURCE_GPG_URL}' \
+-      | gpg --dearmor \
+-      | sudo tee '${NODESOURCE_KEYRING}' >/dev/null
+-  "
++    curl -fsSL '${NODESOURCE_GPG_URL}' -o /tmp/nodesource.gpg.key
++  "
++
++  sudo gpg --dearmor \
++    -o "${NODESOURCE_KEYRING}" \
++    /tmp/nodesource.gpg.key
++
++  rm -f /tmp/nodesource.gpg.key
++
+   sudo chmod a+r "${NODESOURCE_KEYRING}"
+ 
+@@
+-  retry 3 2 'sudo apt-get update -y'
++  retry 3 2 sudo apt-get update -y
++
+   apt_install nodejs
+ 
+   step "Updating npm to latest stable..."
+-  retry 3 2 'npm install -g npm@latest'
++
++  retry 3 2 npm install -g npm@10
+ 
+   configure_npm_prefix
+ 
+@@
+-  retry 3 2 "
+-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+-      | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+-  "
++  retry 3 2 curl -fsSL \
++    https://download.docker.com/linux/ubuntu/gpg \
++    -o /tmp/docker.gpg
++
++  sudo gpg --dearmor \
++    --yes \
++    -o /etc/apt/keyrings/docker.gpg \
++    /tmp/docker.gpg
++
++  rm -f /tmp/docker.gpg
++
+   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+ 
+@@
+-  retry 3 2 'sudo apt-get update -y'
++  retry 3 2 sudo apt-get update -y
++
+   apt_install docker-ce docker-ce-cli containerd.io \
+               docker-buildx-plugin docker-compose-plugin
+ 
+@@
+-    retry 3 2 "npm install -g '${CODEX_NPM_PACKAGE}@latest'"
++    retry 3 2 npm install -g "${CODEX_NPM_PACKAGE}@latest"
++
+     success "Codex updated: $(codex --version) ✓"
++
+     return
+   fi
+ 
+   step "Installing ${CODEX_NPM_PACKAGE}@latest..."
+-  retry 3 2 "npm install -g '${CODEX_NPM_PACKAGE}@latest'"
++
++  retry 3 2 npm install -g "${CODEX_NPM_PACKAGE}@latest"
+ 
+   if ! command_exists codex; then
+@@
+ model           = "codex-1"
+ approval-policy = "on-request"
+ sandbox-mode    = "workspace-write"
+-notify          = true
+ EOF
+ 
+   chmod 600 "${config_file}"
+@@
+-  retry 3 2 "npm install -g ${npm_globals[*]}"
++  retry 3 2 npm install -g "${npm_globals[@]}"
+ 
+   # FIX #6: download Oh-My-Zsh installer to temp file first — no curl|sh
+   local shell_name; shell_name="$(basename "${SHELL:-bash}")"
+@@
+ if [[ -d "\${CODEX_CONFIG_DIR}" ]]; then
+-  local backup="\${HOME}/.codex-backup-\$(date +%Y%m%d-%H%M%S)"
++  backup="\${HOME}/.codex-backup-\$(date +%Y%m%d-%H%M%S)"
+   mv "\${CODEX_CONFIG_DIR}" "\${backup}"
+   echo "Config backed up to: \${backup}"
+ fi
+@@
+ main() {
++  if ! command_exists flock; then
++    error "flock is required but not installed."
++    exit 1
++  fi
++
+   _parse_args "$@"
++
+   _init_colors      # must come after _parse_args sets CI_MODE
+ 
+   _acquire_lock
+```
