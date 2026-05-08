@@ -8,13 +8,19 @@ LIB_DIR="${SCRIPT_DIR}/lib"
 SCRIPT_NAME="$(basename "$0")"
 LOG_FILE="${LOG_FILE:-/tmp/zcodex-doctor.log}"
 CI_MODE="${CI_MODE:-${CI:-false}}"
-FAILED=0
+STRICT_MODE="${STRICT:-0}"
 OFFLINE_MODE=false
 REPAIR_MODE=false
 NETWORK_URL="${ZCODEX_DOCTOR_NETWORK_URL:-https://registry.npmjs.org/@openai%2fcodex}"
+INFO_COUNT=0
+WARN_COUNT=0
+ERROR_COUNT=0
+FATAL_COUNT=0
 
 # shellcheck source=scripts/lib/runtime.sh
 . "${LIB_DIR}/runtime.sh"
+# shellcheck source=scripts/lib/dependencies.sh
+. "${LIB_DIR}/dependencies.sh"
 
 usage() {
 	cat <<USAGE
@@ -23,6 +29,7 @@ Usage: ${SCRIPT_NAME} [OPTIONS]
 Options:
   --offline       Skip outbound network checks for airgapped/proxied systems.
   --repair        Apply safe local repairs for Codex config and shell setup.
+  --strict        Treat WARN findings as failures. Also configurable with STRICT=1.
   -h, --help      Show this help message.
 USAGE
 }
@@ -32,12 +39,13 @@ parse_args() {
 		case "$1" in
 		--offline) OFFLINE_MODE=true ;;
 		--repair) REPAIR_MODE=true ;;
+		--strict) STRICT_MODE=1 ;;
 		-h | --help)
 			usage
 			return 64
 			;;
 		*)
-			log_error "Unknown option: $1"
+			doctor_error "Unknown option: $1"
 			usage
 			return 2
 			;;
@@ -46,26 +54,54 @@ parse_args() {
 	done
 }
 
-record_failure() {
-	FAILED=1
+strict_enabled() {
+	case "${STRICT_MODE}" in
+	1 | true | TRUE | yes | YES | on | ON) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+doctor_info() {
+	INFO_COUNT=$((INFO_COUNT + 1))
+	log_info "$*"
+}
+
+doctor_ok() {
+	log_success "$*"
+}
+
+doctor_warn() {
+	WARN_COUNT=$((WARN_COUNT + 1))
+	log_warn "$*"
+}
+
+doctor_error() {
+	ERROR_COUNT=$((ERROR_COUNT + 1))
+	log_error "$*"
+}
+
+doctor_fatal() {
+	FATAL_COUNT=$((FATAL_COUNT + 1))
+	log_error "FATAL: $*"
 }
 
 check_command() {
 	local name="$1"
 	local required="${2:-required}"
+	local hint
 
 	if runtime_command_exists "${name}"; then
-		log_success "${name} found: $(command -v "${name}")"
+		doctor_ok "${name} found: $(command -v "${name}")"
 		return 0
 	fi
 
+	hint="$(dependency_install_hint "${name}")"
 	if [[ "${required}" == "optional" ]]; then
-		log_warn "${name} is missing (optional)."
+		doctor_warn "${name} is missing (optional). ${hint}"
 		return 0
 	fi
 
-	log_warn "${name} is missing."
-	record_failure
+	doctor_error "${name} is missing. ${hint}"
 	return 1
 }
 
@@ -74,7 +110,7 @@ path_entry_is_insecure() {
 	local mode
 
 	[[ -d "${entry}" ]] || return 1
-	mode="$(stat -c '%a' "${entry}" 2>/dev/null || printf '0')"
+	mode="$(stat -Lc '%a' "${entry}" 2>/dev/null || printf '0')"
 	# The final two permission digits are group and other. Values 2, 3, 6,
 	# and 7 include write permissions and are unsafe for executable lookup paths.
 	case "${mode: -2:1}${mode: -1}" in
@@ -91,36 +127,37 @@ check_path() {
 	local invalid=0
 
 	if [[ -z "${path_value}" ]]; then
-		log_warn "PATH is empty."
-		record_failure
+		doctor_error 'PATH is empty; commands cannot be resolved deterministically.'
 		return 1
 	fi
 
 	if [[ "${path_value}" == *::* || "${path_value}" == :* || "${path_value}" == *: ]]; then
-		log_warn "PATH contains an empty entry, which resolves to the current directory."
+		doctor_warn 'PATH contains an empty entry, which resolves to the current directory. Remove empty PATH segments.'
 		invalid=1
 	fi
 
 	while IFS= read -r -d '' entry; do
 		[[ -n "${entry}" ]] || continue
 		if [[ ! -d "${entry}" ]]; then
-			log_warn "PATH entry does not exist: ${entry}"
+			doctor_warn "PATH entry does not exist: ${entry}. Remove stale entries from your shell profile."
 			missing=1
 			continue
 		fi
 		if path_entry_is_insecure "${entry}"; then
-			log_warn "PATH entry is group/other writable: ${entry}"
+			doctor_error "PATH entry is group/other writable: ${entry}. Fix permissions before running privileged installs."
 			insecure=1
 		fi
 	done < <(printf '%s' "${path_value}" | tr ':' '\0')
 
 	if ((missing == 0 && insecure == 0 && invalid == 0)); then
-		log_success "PATH entries are present and not group/other writable."
+		doctor_ok 'PATH entries are present and not group/other writable.'
 		return 0
 	fi
 
-	record_failure
-	return 1
+	if ((insecure > 0)); then
+		return 1
+	fi
+	return 0
 }
 
 check_shell() {
@@ -128,56 +165,53 @@ check_shell() {
 	local shell_name
 
 	if [[ -z "${shell_path}" ]]; then
-		log_warn "SHELL is not set."
-		record_failure
-		return 1
+		doctor_warn 'SHELL is not set. Set SHELL to your interactive shell if shell integration behaves unexpectedly.'
+		return 0
 	fi
 
 	shell_name="$(basename "${shell_path}")"
 	case "${shell_name}" in
 	bash | zsh)
-		log_success "Interactive shell is supported: ${shell_path}"
+		doctor_ok "Interactive shell is supported: ${shell_path}"
 		;;
 	*)
-		log_warn "Interactive shell may need manual configuration: ${shell_path}"
+		doctor_warn "Interactive shell may need manual configuration: ${shell_path}. Bash and zsh are supported automatically."
 		;;
 	esac
 }
 
 check_permissions() {
 	if [[ "${EUID}" -eq 0 ]]; then
-		log_success "Running as root; package operations are available."
+		doctor_ok 'Running as root; package operations are available.'
 		return 0
 	fi
 
 	if runtime_command_exists sudo && sudo -n true >/dev/null 2>&1; then
-		log_success "Passwordless sudo is available for package operations."
+		doctor_ok 'Passwordless sudo is available for package operations.'
 		return 0
 	fi
 
-	log_warn "sudo is unavailable or requires interaction; installer package operations may pause for credentials."
+	doctor_warn 'sudo is unavailable or requires interaction; installer package operations may pause for credentials.'
 }
 
 check_network() {
 	if [[ "${OFFLINE_MODE}" == "true" ]]; then
-		log_warn "Skipping network check because --offline was provided."
+		doctor_warn 'Skipping network check because --offline was provided.'
 		return 0
 	fi
 
 	if ! runtime_command_exists curl; then
-		log_warn "curl is missing; cannot verify network access."
-		record_failure
+		doctor_error 'curl is missing; cannot verify network access. Install curl: sudo apt install curl'
 		return 1
 	fi
 
 	if curl --fail --silent --show-error --location --max-time 8 --head "${NETWORK_URL}" >/dev/null; then
-		log_success "Network access verified: ${NETWORK_URL}"
+		doctor_ok "Network access verified: ${NETWORK_URL}"
 		return 0
 	fi
 
-	log_warn "Network check failed: ${NETWORK_URL}"
-	record_failure
-	return 1
+	doctor_warn "Network check failed: ${NETWORK_URL}. If this host is offline or proxied, rerun with --offline."
+	return 0
 }
 
 repair_codex_config() {
@@ -186,11 +220,10 @@ repair_codex_config() {
 
 	if [[ -f "${config_file}" ]]; then
 		chmod 600 "${config_file}" || {
-			log_warn "Could not restrict ${config_file} permissions."
-			record_failure
+			doctor_error "Could not restrict ${config_file} permissions."
 			return 1
 		}
-		log_success "Repaired Codex config permissions: ${config_file}"
+		doctor_ok "Repaired Codex config permissions: ${config_file}"
 		return 0
 	fi
 
@@ -199,7 +232,7 @@ repair_codex_config() {
 
 repair_shell_profile() {
 	if [[ "${CI_MODE}" == "true" ]]; then
-		log_info "Skipping shell profile repair in CI mode."
+		doctor_info 'Skipping shell profile repair in CI mode.'
 		return 0
 	fi
 	shell_configure_codex
@@ -212,15 +245,15 @@ repair_manifest_state() {
 	phase="$(state_current_phase 2>/dev/null || true)"
 	status="$(state_status 2>/dev/null || true)"
 	if [[ -z "${phase}" ]]; then
-		log_info "No zcodex install state found; writing an audit manifest for current runtime."
+		doctor_info 'No zcodex install state found; writing an audit manifest for current runtime.'
 		repair_codex_config || true
 		repair_shell_profile || true
-		state_mark VERIFY_RUNTIME "doctor repair initialized state" repair
+		state_mark VERIFY_RUNTIME 'doctor repair initialized state' repair
 		manifest_write repair
 		return 0
 	fi
 
-	log_info "Repair context from install state: phase=${phase} status=${status:-unknown}."
+	doctor_info "Repair context from install state: phase=${phase} status=${status:-unknown}."
 	case "${phase}" in
 	COMPLETE)
 		manifest_write repair
@@ -231,51 +264,102 @@ repair_manifest_state() {
 		manifest_write repair
 		;;
 	VALIDATE | DOWNLOAD | VERIFY | INSTALL)
-		log_warn "Install stopped during ${phase}; safe repair will refresh the manifest, but rerun scripts/install-codex-ubuntu.sh to finish package work."
+		doctor_warn "Install stopped during ${phase}; safe repair will refresh the manifest, but rerun scripts/install-codex-ubuntu.sh to finish package work."
 		manifest_write repair
 		;;
 	*)
-		log_warn "Unknown install phase ${phase}; refreshing manifest only."
+		doctor_warn "Unknown install phase ${phase}; refreshing manifest only."
 		manifest_write repair
 		;;
 	esac
 }
 
 run_repairs() {
-	log_section "zcodex repair"
+	log_section 'zcodex repair'
 	repair_manifest_state || true
 }
 
 check_versions() {
 	if runtime_command_exists node; then
-		log_info "node version: $(node --version 2>/dev/null || true)"
+		doctor_info "node version: $(node --version 2>/dev/null || true)"
 	fi
 	if runtime_command_exists npm; then
-		log_info "npm version: $(npm --version 2>/dev/null || true)"
+		doctor_info "npm version: $(npm --version 2>/dev/null || true)"
 	fi
 	if runtime_command_exists codex; then
-		log_info "codex version: $(codex --version 2>/dev/null || true)"
+		doctor_info "codex version: $(codex --version 2>/dev/null || true)"
 	fi
 	if runtime_command_exists docker; then
-		log_info "docker version: $(docker --version 2>/dev/null || true)"
+		doctor_info "docker version: $(docker --version 2>/dev/null || true)"
+	fi
+}
+
+check_platform() {
+	local runtime
+
+	doctor_info "Platform context: $(platform_context_summary)"
+
+	if ! platform_is_supported_arch; then
+		doctor_error "Unsupported architecture: $(platform_arch). Supported architectures: x86_64/amd64 and aarch64/arm64."
+	fi
+	if ! supports_apt; then
+		doctor_error 'Unsupported package runtime. zcodex currently requires APT capability (apt-get and dpkg-query).'
+	fi
+
+	if platform_is_supported_ubuntu; then
+		doctor_ok "Ubuntu-first platform detected: $(platform_pretty_name)."
+	else
+		doctor_warn "$(platform_pretty_name) is not a primary zcodex target. Continuing because required capabilities are present; package behavior is best-effort and unsupported."
+	fi
+
+	if platform_is_wsl; then
+		doctor_warn 'WSL environment detected; Docker and shell integration behavior may differ from native Linux.'
+	fi
+
+	runtime="$(platform_container_runtime)"
+	if [[ "${runtime}" != "none" ]]; then
+		doctor_warn "Container runtime detected (${runtime}); service management and Docker setup may be limited."
 	fi
 }
 
 run_checks() {
-	platform_validate || record_failure
+	check_platform || true
 	check_path || true
 	check_shell || true
-	check_permissions
+	check_permissions || true
 	check_command bash || true
 	check_command curl || true
 	check_command git || true
-	check_command node || true
-	check_command npm || true
-	check_command codex || true
-	check_command docker optional
+	check_command node optional || true
+	check_command npm optional || true
+	check_command codex optional || true
+	check_command docker optional || true
 	check_network || true
 	check_versions
-	return "${FAILED}"
+}
+
+print_summary() {
+	log_section 'zcodex doctor summary'
+	if strict_enabled; then
+		doctor_info 'Strict mode: enabled (WARN findings fail the doctor run).'
+	else
+		doctor_info 'Strict mode: disabled (WARN findings are reported but do not fail the doctor run).'
+	fi
+	printf 'Summary: INFO=%s WARN=%s ERROR=%s FATAL=%s\n' "${INFO_COUNT}" "${WARN_COUNT}" "${ERROR_COUNT}" "${FATAL_COUNT}" >&2
+
+	if ((FATAL_COUNT > 0 || ERROR_COUNT > 0)); then
+		log_error 'Doctor failed: resolve ERROR/FATAL findings above.'
+		return 1
+	fi
+	if strict_enabled && ((WARN_COUNT > 0)); then
+		log_error 'Doctor failed in strict mode: resolve WARN findings above or rerun without --strict.'
+		return 1
+	fi
+	if ((WARN_COUNT > 0)); then
+		log_warn 'Doctor passed with warnings. Review WARN findings when practical.'
+	else
+		log_success 'Doctor passed without warnings.'
+	fi
 }
 
 main() {
@@ -289,11 +373,12 @@ main() {
 		*) return "${parse_status}" ;;
 		esac
 	}
-	log_section "zcodex doctor"
+	log_section 'zcodex doctor'
 	if [[ "${REPAIR_MODE}" == "true" ]]; then
 		run_repairs
 	fi
 	run_checks
+	print_summary
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

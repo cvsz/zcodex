@@ -61,22 +61,35 @@ SH
 	[[ "$output" == *"Skipping network check"* ]]
 }
 
-@test "doctor flags empty PATH entries" {
+@test "doctor allows PATH warnings by default" {
 	local tmpbin
 	tmpbin="$(mktemp -d)"
 	chmod 755 "${tmpbin}"
-	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; FAILED=0; check_path || true; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
+	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; WARN_COUNT=0; ERROR_COUNT=0; check_path || true; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	rm -rf "${tmpbin}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"empty entry"* ]]
-	[[ "$output" == *"FAILED=1"* ]]
+	[[ "$output" == *"ERROR=0 WARN=1"* ]]
 }
 
 @test "doctor treats docker as optional" {
-	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; FAILED=0; check_command docker optional; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; WARN_COUNT=0; ERROR_COUNT=0; check_command docker optional; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"docker is missing (optional)"* ]]
-	[[ "$output" == *"FAILED=0"* ]]
+	[[ "$output" == *"ERROR=0 WARN=1"* ]]
+}
+
+@test "doctor strict mode fails warnings" {
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; STRICT_MODE=1; WARN_COUNT=1; ERROR_COUNT=0; FATAL_COUNT=0; print_summary' "${REPO_ROOT}"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"strict mode"* ]]
+}
+
+@test "dependency validation reports missing commands" {
+	run env PATH="/nonexistent" /usr/bin/bash -c '. "${0}/scripts/lib/dependencies.sh"; validate_required_tooling' "${REPO_ROOT}"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"Missing required dependency"* ]]
+	[[ "$output" == *"make deps-dev"* ]]
 }
 
 @test "backup_file preserves existing files under backup root" {
