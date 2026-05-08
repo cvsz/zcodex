@@ -14,6 +14,7 @@ codex_install_cli() {
 codex_write_config() {
 	local codex_home="${CODEX_HOME:-${HOME}/.codex}"
 	install -d -m 700 "${codex_home}"
+	declare -F backup_file >/dev/null && backup_file "${codex_home}/config.toml"
 	cat >"${codex_home}/config.toml" <<'CONFIG'
 model = "gpt-5-codex"
 

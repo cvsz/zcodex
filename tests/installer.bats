@@ -78,3 +78,30 @@ SH
 	[[ "$output" == *"docker is missing (optional)"* ]]
 	[[ "$output" == *"FAILED=0"* ]]
 }
+
+@test "backup_file preserves existing files under backup root" {
+	local tmpdir
+	local source_file
+	tmpdir="$(mktemp -d)"
+	source_file="${tmpdir}/home/user/.codex/config.toml"
+	mkdir -p "$(dirname "${source_file}")"
+	printf 'existing config\n' >"${source_file}"
+
+	run env ZCODEX_BACKUP_DIR="${tmpdir}/backup" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/backup.sh"; backup_file "${1}"; cat "${ZCODEX_BACKUP_DIR}/${1#/}"' "${REPO_ROOT}" "${source_file}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"existing config"* ]]
+}
+
+@test "codex_write_config backs up existing config before rewrite" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	mkdir -p "${tmpdir}/home/.codex"
+	printf 'old config\n' >"${tmpdir}/home/.codex/config.toml"
+
+	run env -u CODEX_HOME HOME="${tmpdir}/home" ZCODEX_BACKUP_DIR="${tmpdir}/backup" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/backup.sh"; . "${0}/scripts/lib/codex.sh"; codex_write_config; cat "${ZCODEX_BACKUP_DIR}/${HOME#/}/.codex/config.toml"; printf -- "---\n"; cat "${HOME}/.codex/config.toml"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"old config"* ]]
+	[[ "$output" == *"model = \"gpt-5-codex\""* ]]
+}

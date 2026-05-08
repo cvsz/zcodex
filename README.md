@@ -27,6 +27,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - `retry.sh` for array-based exponential backoff.
 - `platform.sh` for Ubuntu and architecture validation.
 - `security.sh` for tempfiles, locks, HTTPS downloads, and checksums.
+- `backup.sh` for rollback snapshots before Codex config or shell profile changes.
 - `packages.sh`, `nodejs.sh`, `docker.sh`, `codex.sh`, and `shell.sh` for install-specific domains.
 
 ## Security model
@@ -35,6 +36,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - HTTPS-only download helper with strict curl flags.
 - Optional SHA-256 verification for downloaded artifacts.
 - `mktemp -d` workspaces with trap-based cleanup.
+- Timestamped rollback backups under `${HOME}/.zcodex/backups/` before overwriting managed user files.
 - `flock` protection against concurrent installer runs.
 - Minimal Codex config generation without storing secrets.
 
@@ -55,7 +57,7 @@ bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
 The installer performs these steps:
 
 1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
-2. Acquire an installation lock and secure temporary workspace.
+2. Acquire an installation lock, secure temporary workspace, and rollback backup directory.
 3. Update APT metadata and install base packages.
 4. Install Node.js/npm and the Codex CLI.
 5. Optionally install Docker and configure group membership.
@@ -109,5 +111,9 @@ bash scripts/doctor.sh --offline
 ```
 
 Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
+
+## Rollback strategy
+
+Before rewriting an existing Codex config or appending to an existing shell profile, the installer copies the original file into `${HOME}/.zcodex/backups/<timestamp>/` while preserving the source path under that backup root. Restore a file by copying the saved version back to its original location, then rerun `bash scripts/doctor.sh` to validate the runtime.
 
 More details are available in `docs/troubleshooting.md`.
