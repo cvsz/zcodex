@@ -153,6 +153,10 @@ The installer uses:
 
 Report vulnerabilities privately using [`SECURITY.md`](SECURITY.md).
 
+## Installer config
+
+A valid example installer configuration is available at [`config/zcodex/config.toml`](config/zcodex/config.toml). Copy it to `${HOME}/.config/zcodex/config.toml` when you want a local, operator-editable config file. Shell snippets or custom orchestration notes must remain inside TOML strings, such as `[custom_instructions].shell`; appending raw shell after the TOML document makes the config invalid.
+
 ## Codex config
 
 The generated Codex config intentionally stays minimal:
