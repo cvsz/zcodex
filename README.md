@@ -1,90 +1,106 @@
-# Hi, I'm [Your Name] 👋
+# zcodex
 
-> Building thoughtful software, sharing what I learn, and turning ambitious ideas into reliable products.
+`zcodex` is a clean, modular Ubuntu bootstrapper for installing and validating the Codex CLI runtime. The repository is regenerated around small shell libraries, CI validation, and security-focused installation primitives instead of monolithic patch maintenance.
 
-Welcome to my GitHub profile. This is where I explore practical engineering, document experiments, and build projects that solve real problems. I care about clean code, useful products, strong collaboration, and continuous improvement.
+## Supported OS
 
-## 🚀 About Me
+- Ubuntu 22.04 LTS
+- Ubuntu 24.04 LTS
+- Architectures: `x86_64`, `aarch64`, `arm64`
 
-- 💼 Profession: **[Your profession or role]**
-- 🧠 Currently focused on: **[What you are learning or building]**
-- 🛠️ I enjoy working on: **[Product type, domain, or technical area]**
-- 🤝 Open to collaborating on: **[Open source, startups, research, tools, apps, etc.]**
-- 🌱 Always improving in: **[Skill, framework, discipline, or craft]**
-- ⚡ Fun fact: **[A memorable personal detail]**
+## Repository architecture
 
-## 🧰 Tech Stack
+```text
+zcodex/
+├── .codex/                  # Codex config and agent instructions
+├── scripts/                 # Installer entry points
+│   └── lib/                 # Shared runtime libraries
+├── tests/                   # Bats and shellcheck checks
+├── .github/workflows/       # CI, installer, and security workflows
+└── docs/                    # Architecture, runtime, security, troubleshooting
+```
 
-### Languages
+The main installer is an orchestration layer. Reusable behavior lives in `scripts/lib`:
 
-![Languages](https://skillicons.dev/icons?i=js,ts,python,go,rust,java,cpp)
+- `logging.sh` for structured CI-safe logs.
+- `retry.sh` for array-based exponential backoff.
+- `platform.sh` for Ubuntu and architecture validation.
+- `security.sh` for tempfiles, locks, HTTPS downloads, and checksums.
+- `packages.sh`, `nodejs.sh`, `docker.sh`, `codex.sh`, and `shell.sh` for install-specific domains.
 
-### Frontend
+## Security model
 
-![Frontend](https://skillicons.dev/icons?i=react,next,vue,tailwind,html,css)
+- No `curl | bash` or `curl | sh` execution patterns.
+- HTTPS-only download helper with strict curl flags.
+- Optional SHA-256 verification for downloaded artifacts.
+- `mktemp -d` workspaces with trap-based cleanup.
+- `flock` protection against concurrent installer runs.
+- Minimal Codex config generation without storing secrets.
 
-### Backend & Data
+## Installation flow
 
-![Backend and Data](https://skillicons.dev/icons?i=nodejs,express,fastapi,postgres,mongodb,redis)
+```bash
+bash scripts/install-codex-ubuntu.sh
+```
 
-### Cloud, DevOps & Tools
+Common options:
 
-![Cloud DevOps Tools](https://skillicons.dev/icons?i=aws,docker,kubernetes,githubactions,linux,git)
+```bash
+CI=true bash scripts/install-codex-ubuntu.sh --ci --skip-docker
+bash scripts/install-codex-ubuntu.sh --skip-optional
+bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
+```
 
-> Replace the icons above with the tools you use most. A focused stack is more memorable than a long list.
+The installer performs these steps:
 
-## ✨ Featured Projects
+1. Validate Ubuntu release and CPU architecture.
+2. Acquire an installation lock and secure temporary workspace.
+3. Update APT metadata and install base packages.
+4. Install Node.js/npm and the Codex CLI.
+5. Optionally install Docker and configure group membership.
+6. Write a minimal Codex config and shell integration.
 
-| Project | What it does | Tech | Status |
-| --- | --- | --- | --- |
-| **[Project One](https://github.com/your-username/project-one)** | A short, benefit-focused description of your best project. | `[Tech]` `[Tech]` | 🚀 Live |
-| **[Project Two](https://github.com/your-username/project-two)** | A practical tool, app, library, or experiment worth highlighting. | `[Tech]` `[Tech]` | 🛠️ Active |
-| **[Project Three](https://github.com/your-username/project-three)** | A project that shows range, depth, creativity, or impact. | `[Tech]` `[Tech]` | 📚 Case study |
+## Codex config
 
-## 📌 What You'll Find Here
+The repository config intentionally stays minimal and valid:
 
-- Production-minded applications with readable architecture
-- Experiments that test new ideas quickly
-- Notes, utilities, and templates that make development smoother
-- Open-source contributions and collaboration-friendly repositories
+```toml
+model = "gpt-5-codex"
 
-## 📈 GitHub Snapshot
+approval-policy = "on-request"
+sandbox-mode = "workspace-write"
+```
 
-![GitHub stats](https://github-readme-stats.vercel.app/api?username=your-username&show_icons=true&theme=transparent&hide_border=true)
+## Development
 
-![Top languages](https://github-readme-stats.vercel.app/api/top-langs/?username=your-username&layout=compact&theme=transparent&hide_border=true)
+```bash
+make lint
+make fmt-check
+make test
+make doctor
+```
 
-![GitHub streak](https://streak-stats.demolab.com?user=your-username&theme=transparent&hide_border=true)
+Equivalent direct commands:
 
-> Update `your-username` in the image URLs so the cards show your real activity.
+```bash
+bash -n scripts/*.sh scripts/lib/*.sh tests/*.sh
+find scripts tests -type f -name '*.sh' -print0 | xargs -0 shellcheck
+shfmt -d scripts tests
+bats tests
+```
 
-## 🧭 Current Goals
+## CI
 
-- Ship **[specific product, feature, or project]**
-- Deepen expertise in **[technology or discipline]**
-- Contribute to **[community, open-source area, or cause]**
-- Write more about **[topics you want to share]**
+CI runs shell syntax checks, shellcheck, shfmt, Bats tests, installer dry-run validation, Gitleaks, and Trivy filesystem scanning.
 
-## 📝 Recent Highlights
+## Troubleshooting
 
-- 🏆 **[Achievement]** — describe a recent win, launch, certification, talk, or contribution.
-- 📚 **[Learning]** — mention a course, book, topic, or technical milestone.
-- 🚢 **[Launch]** — link to a shipped feature, article, project, or demo.
+Start with:
 
-## 🤝 Let's Connect
+```bash
+bash scripts/doctor.sh
+```
 
-[![Portfolio](https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=firefox&logoColor=white)](https://your-website.com)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/your-profile)
-[![X](https://img.shields.io/badge/X-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/your-handle)
-[![Email](https://img.shields.io/badge/Email-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:your-email@example.com)
+If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
 
-## 💬 Ask Me About
-
-- **[Topic 1]**
-- **[Topic 2]**
-- **[Topic 3]**
-- **[Topic 4]**
-
----
-
-Thanks for stopping by. If something here looks useful, feel free to explore, open an issue, or start a conversation.
+More details are available in `docs/troubleshooting.md`.
