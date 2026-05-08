@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  TZ: UTC
+
 jobs:
   bats:
     name: bats / ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }}
@@ -24,14 +33,37 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
+      - name: Configure isolated temp directory
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/zcodex-tmp"
+          echo "TMPDIR=${RUNNER_TEMP}/zcodex-tmp" >>"${GITHUB_ENV}"
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli
-      - name: Validate environment
-        run: make validate-env
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli && break
+            if [[ "${attempt}" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+      - name: Validate dependency versions
+        run: |
+          set -euo pipefail
+          bash --version | head -1
+          git --version
+          shellcheck --version
+          shfmt --version
+          bats --version
+          tar --version | head -1
+          gzip --version | head -1
+          python3 --version
+          make validate-env
       - name: Bash syntax checks
         run: bash -n scripts/*.sh scripts/lib/*.sh tests/*.sh
       - name: Run tests
-        run: bats tests
+        run: make test
       - name: Installer dry run
         run: CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
 
@@ -41,10 +73,30 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Configure isolated temp directory
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/zcodex-release-tmp"
+          echo "TMPDIR=${RUNNER_TEMP}/zcodex-release-tmp" >>"${GITHUB_ENV}"
       - name: Install release validation tools
-        run: sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3
-      - name: Validate and build reproducible release
-        run: scripts/release.sh
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli && break
+            if [[ "${attempt}" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+      - name: Validate release tooling
+        run: make validate-env
+      - name: Build reproducible release twice
+        run: |
+          set -euo pipefail
+          scripts/release.sh --output-dir dist
+          scripts/release.sh --skip-validate --output-dir dist.repro
+          version="$(tr -d '[:space:]' < VERSION)"
+          cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
       - name: Upload release dry-run artifacts

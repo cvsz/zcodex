@@ -9,6 +9,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERSION_FILE="${REPO_ROOT}/VERSION"
 CHANGELOG_FILE="${REPO_ROOT}/CHANGELOG.md"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/dist}"
+SOURCE_DATE_EPOCH_OVERRIDE="${SOURCE_DATE_EPOCH:-}"
 SKIP_VALIDATE=0
 CLEAN_OUTPUT=1
 VERSION_OVERRIDE=""
@@ -83,6 +84,7 @@ validate_environment() {
 	log "Validating release/runtime dependencies before release work"
 	validate_required_tooling || fail "missing release/runtime dependencies"
 	require_command gzip 'gzip compressor' || fail "missing release archive dependency: gzip"
+	require_command tar 'tar archiver' || fail "missing release archive dependency: tar"
 	if [[ "${SKIP_VALIDATE}" -eq 0 ]]; then
 		require_command make 'make build orchestrator' || fail "missing validation dependency: make"
 	fi
@@ -145,10 +147,47 @@ when repository signing keys, OIDC policy, and SBOM ownership are finalized.
 SIGNING
 }
 
+release_source_date_epoch() {
+	if [[ -n "${SOURCE_DATE_EPOCH_OVERRIDE}" ]]; then
+		[[ "${SOURCE_DATE_EPOCH_OVERRIDE}" =~ ^[0-9]+$ ]] || fail "SOURCE_DATE_EPOCH must be an integer Unix timestamp"
+		printf '%s\n' "${SOURCE_DATE_EPOCH_OVERRIDE}"
+		return 0
+	fi
+
+	if git -C "${REPO_ROOT}" rev-parse --verify "${GIT_REF}^{commit}" >/dev/null 2>&1; then
+		git -C "${REPO_ROOT}" log -1 --format=%ct "${GIT_REF}"
+		return 0
+	fi
+
+	printf '%s\n' 0
+}
+
 release_archive_stream() {
 	local version="$1"
 	local tag="v${version}"
-	git -C "${REPO_ROOT}" archive --format=tar --prefix="zcodex-${tag}/" "${GIT_REF}" | gzip -n
+	local prefix="zcodex-${tag}"
+	local epoch
+
+	epoch="$(release_source_date_epoch)"
+	(
+		local staging_dir
+		staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/zcodex-release.XXXXXX")"
+		trap 'rm -rf "${staging_dir}"' EXIT
+
+		git -C "${REPO_ROOT}" archive --format=tar --prefix="${prefix}/" "${GIT_REF}" | tar -xf - -C "${staging_dir}"
+
+		LC_ALL=C tar \
+			--sort=name \
+			--format=posix \
+			--pax-option='exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime' \
+			--mtime="@${epoch}" \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-cf - \
+			-C "${staging_dir}" \
+			"${prefix}" | gzip -n
+	)
 }
 
 verify_reproducible_archive() {

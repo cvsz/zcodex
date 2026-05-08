@@ -1,6 +1,12 @@
-SHELL := /usr/bin/env bash
+SHELL := /usr/bin/bash
+.SHELLFLAGS := -euo pipefail -c
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check test doctor validate ci-local release release-checksum
+export LC_ALL := C.UTF-8
+export LANG := C.UTF-8
+export TZ := UTC
+export TMPDIR ?= /tmp
+
+.PHONY: install deps-dev validate-env lint fmt fmt-check test doctor validate ci-local release release-checksum release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -12,7 +18,7 @@ validate-env:
 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'
 
 lint:
-	{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0; } | xargs -0 shellcheck
+	{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0 | sort -z; } | xargs -0 shellcheck
 
 fmt:
 	shfmt -w codex.sh scripts tests
@@ -37,3 +43,9 @@ release:
 
 release-checksum:
 	cd dist && sha256sum -c SHA256SUMS
+
+release-reproducible:
+	rm -rf dist.repro-a dist.repro-b
+	bash scripts/release.sh --skip-validate --output-dir dist.repro-a
+	bash scripts/release.sh --skip-validate --output-dir dist.repro-b
+	cmp dist.repro-a/zcodex-v$$(tr -d '[:space:]' < VERSION).tar.gz dist.repro-b/zcodex-v$$(tr -d '[:space:]' < VERSION).tar.gz
