@@ -4,6 +4,10 @@
 
 Loads the full modular runtime stack for entry points that need installer, security, and repair helpers without duplicating source order.
 
+## `exec.sh`
+
+Provides the smallest shared runtime primitives: command discovery, logged command execution, and entry-point trap installation. It is safe for the release orchestrator to source without loading the installer stack.
+
 ## `installer.sh`
 
 Owns installer-specific CLI parsing, phase sequencing, dry-run behavior, optional component gates, and trap cleanup so `install-codex-ubuntu.sh` remains a thin entry point.
@@ -30,7 +34,7 @@ Defines reviewed runtime version pins for Node.js, Docker apt packages, the Dock
 
 ## `state.sh`
 
-Writes explicit phase state and append-only phase history below `${HOME}/.local/share/zcodex/state` for interrupted install diagnosis and deterministic replay.
+Writes explicit phase state and append-only phase history below `${HOME}/.local/share/zcodex/state` for interrupted install diagnosis and deterministic replay. New reusable code can use the `_in` variants to pass state home and state directory explicitly while compatibility wrappers preserve the existing environment-driven API.
 
 ## `manifest.sh`
 

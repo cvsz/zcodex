@@ -3,13 +3,19 @@
 
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_NAME="$(basename "$0")"
-LOG_FILE="${LOG_FILE:-${ZCODEX_RELEASE_LOG:-${SCRIPT_DIR}/codex_release.log}}"
+ZCODEX_RELEASE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly ZCODEX_RELEASE_SCRIPT_DIR
+readonly ZCODEX_RELEASE_LIB_DIR="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/lib"
+ZCODEX_RELEASE_SCRIPT_NAME="$(basename "$0")"
+readonly ZCODEX_RELEASE_SCRIPT_NAME
+ZCODEX_RELEASE_LOG_FILE="${LOG_FILE:-${ZCODEX_RELEASE_LOG:-${ZCODEX_RELEASE_SCRIPT_DIR}/codex_release.log}}"
+
+# shellcheck source=scripts/lib/exec.sh
+. "${ZCODEX_RELEASE_LIB_DIR}/exec.sh"
 
 usage() {
 	cat <<USAGE
-Usage: ${SCRIPT_NAME} {basic|full|ultimate|orchestrator|release} [ARGS...]
+Usage: ${ZCODEX_RELEASE_SCRIPT_NAME} {basic|full|ultimate|orchestrator|release} [ARGS...]
 
 Modes:
   basic         Run the Ubuntu Codex installer with any extra installer args.
@@ -19,24 +25,22 @@ Modes:
   release       Run the installer, then doctor online for release validation.
 
 Examples:
-  ${SCRIPT_NAME} basic --dry-run --skip-docker
-  ${SCRIPT_NAME} orchestrator --offline --repair
-  ${SCRIPT_NAME} release --skip-optional
+  ${ZCODEX_RELEASE_SCRIPT_NAME} basic --dry-run --skip-docker
+  ${ZCODEX_RELEASE_SCRIPT_NAME} orchestrator --offline --repair
+  ${ZCODEX_RELEASE_SCRIPT_NAME} release --skip-optional
 USAGE
 }
 
 log() {
 	local message="$1"
-	printf '[Codex] %s\n' "${message}" | tee -a "${LOG_FILE}"
+	printf '[Codex] %s\n' "${message}" | tee -a "${ZCODEX_RELEASE_LOG_FILE}"
 }
 
 run_step() {
 	local description="$1"
 	shift
 
-	log "${description}"
-	LOG_FILE="${LOG_FILE}" "$@" 2>&1 | tee -a "${LOG_FILE}"
-	return "${PIPESTATUS[0]}"
+	LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" runtime_exec_logged "${ZCODEX_RELEASE_LOG_FILE}" "${description}" "$@"
 }
 
 require_local_script() {
@@ -49,24 +53,24 @@ require_local_script() {
 
 validate_orchestrator_environment() {
 	log "Validating orchestrator environment..."
-	command -v bash >/dev/null 2>&1 || {
+	runtime_command_exists bash || {
 		printf 'bash is required. Aborting.\n' >&2
 		return 1
 	}
-	command -v kubectl >/dev/null 2>&1 || log "Warning: Kubernetes not found, skipping cluster orchestration."
-	if ! command -v docker >/dev/null 2>&1; then
+	runtime_command_exists kubectl || log "Warning: Kubernetes not found, skipping cluster orchestration."
+	if ! runtime_command_exists docker; then
 		log "Warning: Docker not found; installer/doctor will handle Docker according to selected flags."
 	fi
-	if ! command -v node >/dev/null 2>&1; then
+	if ! runtime_command_exists node; then
 		log "Warning: Node.js not found; installer can install it on supported Ubuntu hosts."
 	fi
 }
 
 main() {
 	local mode="${1:-}"
-	local installer="${SCRIPT_DIR}/scripts/install-codex-ubuntu.sh"
-	local doctor="${SCRIPT_DIR}/scripts/doctor.sh"
-	local validator="${SCRIPT_DIR}/scripts/validate-environment.sh"
+	local installer="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/install-codex-ubuntu.sh"
+	local doctor="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/doctor.sh"
+	local validator="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/validate-environment.sh"
 
 	if [[ -z "${mode}" || "${mode}" == "-h" || "${mode}" == "--help" ]]; then
 		usage
@@ -98,7 +102,7 @@ main() {
 	release)
 		run_step "Executing Final Release Installation..." bash "${installer}" "$@"
 		run_step "Executing Final Release Validation..." bash "${doctor}"
-		log "Release build complete. Artifacts logged in ${LOG_FILE}"
+		log "Release build complete. Artifacts logged in ${ZCODEX_RELEASE_LOG_FILE}"
 		;;
 	*)
 		usage >&2

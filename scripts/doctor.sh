@@ -54,7 +54,7 @@ check_command() {
 	local name="$1"
 	local required="${2:-required}"
 
-	if command_exists "${name}"; then
+	if runtime_command_exists "${name}"; then
 		log_success "${name} found: $(command -v "${name}")"
 		return 0
 	fi
@@ -150,7 +150,7 @@ check_permissions() {
 		return 0
 	fi
 
-	if command_exists sudo && sudo -n true >/dev/null 2>&1; then
+	if runtime_command_exists sudo && sudo -n true >/dev/null 2>&1; then
 		log_success "Passwordless sudo is available for package operations."
 		return 0
 	fi
@@ -164,7 +164,7 @@ check_network() {
 		return 0
 	fi
 
-	if ! command_exists curl; then
+	if ! runtime_command_exists curl; then
 		log_warn "curl is missing; cannot verify network access."
 		record_failure
 		return 1
@@ -247,16 +247,16 @@ run_repairs() {
 }
 
 check_versions() {
-	if command_exists node; then
+	if runtime_command_exists node; then
 		log_info "node version: $(node --version 2>/dev/null || true)"
 	fi
-	if command_exists npm; then
+	if runtime_command_exists npm; then
 		log_info "npm version: $(npm --version 2>/dev/null || true)"
 	fi
-	if command_exists codex; then
+	if runtime_command_exists codex; then
 		log_info "codex version: $(codex --version 2>/dev/null || true)"
 	fi
-	if command_exists docker; then
+	if runtime_command_exists docker; then
 		log_info "docker version: $(docker --version 2>/dev/null || true)"
 	fi
 }

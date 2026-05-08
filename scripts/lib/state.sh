@@ -5,17 +5,43 @@
 : "${ZCODEX_STATE_DIR:=${ZCODEX_STATE_HOME}/state}"
 : "${ZCODEX_INSTALL_ID:=}"
 
-state_init() {
-	install -d -m 700 "${ZCODEX_STATE_HOME}" "${ZCODEX_STATE_DIR}"
-	if [[ -z "${ZCODEX_INSTALL_ID}" ]]; then
-		if [[ -r "${ZCODEX_STATE_DIR}/install_id" ]]; then
-			ZCODEX_INSTALL_ID="$(cat "${ZCODEX_STATE_DIR}/install_id")"
-		else
-			ZCODEX_INSTALL_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-		fi
+state_home_default() {
+	printf '%s\n' "${ZCODEX_STATE_HOME}"
+}
+
+state_dir_default() {
+	printf '%s\n' "${ZCODEX_STATE_DIR}"
+}
+
+state_install_id_file() {
+	local state_dir="${1:-$(state_dir_default)}"
+	printf '%s/install_id\n' "${state_dir}"
+}
+
+state_read_or_create_install_id() {
+	local state_dir="${1:-$(state_dir_default)}"
+	local install_id_file
+
+	install_id_file="$(state_install_id_file "${state_dir}")"
+	if [[ -r "${install_id_file}" ]]; then
+		cat "${install_id_file}"
+	elif [[ -n "${ZCODEX_INSTALL_ID}" ]]; then
+		printf '%s\n' "${ZCODEX_INSTALL_ID}"
+	else
+		printf '%s-%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" "$$"
 	fi
-	printf '%s\n' "${ZCODEX_INSTALL_ID}" >"${ZCODEX_STATE_DIR}/install_id"
-	chmod 600 "${ZCODEX_STATE_DIR}/install_id"
+}
+
+state_init() {
+	local state_home="${1:-$(state_home_default)}"
+	local state_dir="${2:-$(state_dir_default)}"
+	local install_id
+
+	install -d -m 700 "${state_home}" "${state_dir}"
+	install_id="$(state_read_or_create_install_id "${state_dir}")"
+	ZCODEX_INSTALL_ID="${install_id}"
+	printf '%s\n' "${install_id}" >"$(state_install_id_file "${state_dir}")"
+	chmod 600 "$(state_install_id_file "${state_dir}")"
 }
 
 state_valid_phase() {
@@ -26,94 +52,150 @@ state_valid_phase() {
 }
 
 state_phase_file() {
-	printf '%s/current_phase\n' "${ZCODEX_STATE_DIR}"
+	local state_dir="${1:-$(state_dir_default)}"
+	printf '%s/current_phase\n' "${state_dir}"
 }
 
 state_status_file() {
-	printf '%s/status\n' "${ZCODEX_STATE_DIR}"
+	local state_dir="${1:-$(state_dir_default)}"
+	printf '%s/status\n' "${state_dir}"
 }
 
 state_history_file() {
-	printf '%s/history.log\n' "${ZCODEX_STATE_DIR}"
+	local state_dir="${1:-$(state_dir_default)}"
+	printf '%s/history.log\n' "${state_dir}"
 }
 
 state_completed_dir() {
-	printf '%s/completed.d\n' "${ZCODEX_STATE_DIR}"
+	local state_dir="${1:-$(state_dir_default)}"
+	printf '%s/completed.d\n' "${state_dir}"
 }
 
 state_phase_completed_file() {
 	local phase="$1"
-	printf '%s/%s\n' "$(state_completed_dir)" "${phase}"
+	local state_dir="${2:-$(state_dir_default)}"
+	printf '%s/%s\n' "$(state_completed_dir "${state_dir}")" "${phase}"
+}
+
+state_write_status_in() {
+	local state_home="$1"
+	local state_dir="$2"
+	local status="$3"
+
+	state_init "${state_home}" "${state_dir}"
+	printf '%s\n' "${status}" >"$(state_status_file "${state_dir}")"
+	chmod 600 "$(state_status_file "${state_dir}")"
 }
 
 state_write_status() {
 	local status="$1"
-	state_init
-	printf '%s\n' "${status}" >"$(state_status_file)"
-	chmod 600 "$(state_status_file)"
+	state_write_status_in "$(state_home_default)" "$(state_dir_default)" "${status}"
+}
+
+state_status_in() {
+	local state_dir="$1"
+	local status_file
+
+	status_file="$(state_status_file "${state_dir}")"
+	[[ -r "${status_file}" ]] || return 1
+	cat "${status_file}"
 }
 
 state_status() {
-	local status_file
-	status_file="$(state_status_file)"
-	[[ -r "${status_file}" ]] || return 1
-	cat "${status_file}"
+	state_status_in "$(state_dir_default)"
+}
+
+state_mark_in() {
+	local state_home="$1"
+	local state_dir="$2"
+	local phase="$3"
+	local message="${4:-}"
+	local status="${5:-running}"
+	local now install_id
+
+	if ! state_valid_phase "${phase}"; then
+		log_error "Invalid install phase: ${phase}"
+		return 1
+	fi
+
+	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	state_init "${state_home}" "${state_dir}"
+	install_id="$(state_read_or_create_install_id "${state_dir}")"
+	printf '%s\n' "${phase}" >"$(state_phase_file "${state_dir}")"
+	chmod 600 "$(state_phase_file "${state_dir}")"
+	state_write_status_in "${state_home}" "${state_dir}" "${status}"
+	printf '%s phase=%s status=%s install_id=%s message=%s\n' "${now}" "${phase}" "${status}" "${install_id}" "${message}" >>"$(state_history_file "${state_dir}")"
+	chmod 600 "$(state_history_file "${state_dir}")"
+	log_info "Install phase: ${phase} (${status})${message:+ - ${message}}"
 }
 
 state_mark() {
 	local phase="$1"
 	local message="${2:-}"
 	local status="${3:-running}"
-	local now
+	state_mark_in "$(state_home_default)" "$(state_dir_default)" "${phase}" "${message}" "${status}"
+}
+
+state_complete_phase_in() {
+	local state_home="$1"
+	local state_dir="$2"
+	local phase="$3"
+	local now install_id
 
 	if ! state_valid_phase "${phase}"; then
 		log_error "Invalid install phase: ${phase}"
 		return 1
 	fi
 
+	state_init "${state_home}" "${state_dir}"
+	install -d -m 700 "$(state_completed_dir "${state_dir}")"
 	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-	state_init
-	printf '%s\n' "${phase}" >"$(state_phase_file)"
-	chmod 600 "$(state_phase_file)"
-	state_write_status "${status}"
-	printf '%s phase=%s status=%s install_id=%s message=%s\n' "${now}" "${phase}" "${status}" "${ZCODEX_INSTALL_ID}" "${message}" >>"$(state_history_file)"
-	chmod 600 "$(state_history_file)"
-	log_info "Install phase: ${phase} (${status})${message:+ - ${message}}"
+	install_id="$(state_read_or_create_install_id "${state_dir}")"
+	printf '%s\n' "${now}" >"$(state_phase_completed_file "${phase}" "${state_dir}")"
+	chmod 600 "$(state_phase_completed_file "${phase}" "${state_dir}")"
+	printf '%s phase=%s status=completed install_id=%s message=phase-complete\n' "${now}" "${phase}" "${install_id}" >>"$(state_history_file "${state_dir}")"
 }
 
 state_complete_phase() {
 	local phase="$1"
-	local now
+	state_complete_phase_in "$(state_home_default)" "$(state_dir_default)" "${phase}"
+}
 
-	if ! state_valid_phase "${phase}"; then
-		log_error "Invalid install phase: ${phase}"
-		return 1
-	fi
-
-	state_init
-	install -d -m 700 "$(state_completed_dir)"
-	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-	printf '%s\n' "${now}" >"$(state_phase_completed_file "${phase}")"
-	chmod 600 "$(state_phase_completed_file "${phase}")"
-	printf '%s phase=%s status=completed install_id=%s message=phase-complete\n' "${now}" "${phase}" "${ZCODEX_INSTALL_ID}" >>"$(state_history_file)"
+state_phase_completed_in() {
+	local state_dir="$1"
+	local phase="$2"
+	[[ -r "$(state_phase_completed_file "${phase}" "${state_dir}")" ]]
 }
 
 state_phase_completed() {
 	local phase="$1"
-	[[ -r "$(state_phase_completed_file "${phase}")" ]]
+	state_phase_completed_in "$(state_dir_default)" "${phase}"
+}
+
+state_reset_progress_in() {
+	local state_home="$1"
+	local state_dir="$2"
+
+	state_init "${state_home}" "${state_dir}"
+	rm -rf "$(state_completed_dir "${state_dir}")"
+	install -d -m 700 "$(state_completed_dir "${state_dir}")"
 }
 
 state_reset_progress() {
-	state_init
-	rm -rf "$(state_completed_dir)"
-	install -d -m 700 "$(state_completed_dir)"
+	state_reset_progress_in "$(state_home_default)" "$(state_dir_default)"
+}
+
+state_current_phase_in() {
+	local state_dir="$1"
+	local phase_file
+
+	phase_file="$(state_phase_file "${state_dir}")"
+	[[ -r "${phase_file}" ]] || return 1
+	cat "${phase_file}"
 }
 
 state_current_phase() {
-	local phase_file
-	phase_file="$(state_phase_file)"
-	[[ -r "${phase_file}" ]] || return 1
-	cat "${phase_file}"
+	state_current_phase_in "$(state_dir_default)"
 }
 
 state_is_incomplete() {
@@ -122,10 +204,16 @@ state_is_incomplete() {
 	[[ -n "${phase}" && "${phase}" != "COMPLETE" ]]
 }
 
-state_recovery_summary() {
+state_recovery_summary_in() {
+	local state_dir="$1"
 	local phase status
-	phase="$(state_current_phase 2>/dev/null || true)"
-	status="$(state_status 2>/dev/null || true)"
+
+	phase="$(state_current_phase_in "${state_dir}" 2>/dev/null || true)"
+	status="$(state_status_in "${state_dir}" 2>/dev/null || true)"
 	[[ -n "${phase}" ]] || return 1
 	printf 'phase=%s status=%s\n' "${phase}" "${status:-unknown}"
+}
+
+state_recovery_summary() {
+	state_recovery_summary_in "$(state_dir_default)"
 }

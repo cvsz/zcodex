@@ -73,7 +73,7 @@ SH
 }
 
 @test "doctor treats docker as optional" {
-	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; command_exists() { return 1; }; FAILED=0; check_command docker optional; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; FAILED=0; check_command docker optional; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"docker is missing (optional)"* ]]
 	[[ "$output" == *"FAILED=0"* ]]
@@ -247,4 +247,22 @@ SH
 @test "supports_systemd can be enabled for tests without a running init" {
 	run env ZCODEX_ASSUME_SYSTEMD=true bash -c '. "${0}/scripts/lib/platform.sh"; supports_systemd' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
+}
+
+@test "runtime_exec_logged preserves command exit status" {
+	local logfile
+	logfile="${BATS_TEST_TMPDIR}/exec.log"
+	run bash -c '. "${0}/scripts/lib/exec.sh"; runtime_exec_logged "${1}" "unit command" bash -c "printf output; exit 7"' "${REPO_ROOT}" "${logfile}"
+	[ "$status" -eq 7 ]
+	[[ "$output" == *"unit command"* ]]
+	[[ "$output" == *"output"* ]]
+}
+
+@test "state explicit context writes isolated phase state" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark_in "${1}/home" "${1}/state" VERIFY "explicit" running; state_current_phase_in "${1}/state"; test -s "${1}/state/history.log"' "${REPO_ROOT}" "${tmpdir}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"VERIFY"* ]]
 }
