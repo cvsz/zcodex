@@ -163,3 +163,35 @@ SH
 	[[ "$output" == *"Running Basic Installation"* ]]
 	[[ "$output" == *"Dry run completed without making changes"* ]]
 }
+
+@test "pins validate default deterministic versions" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate; pins_summary' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"codex-cli=0.129.0"* ]]
+}
+
+@test "state tracking writes current phase and history" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark VERIFY "unit test"; state_current_phase; test -s "${ZCODEX_STATE_DIR}/history.log"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"VERIFY"* ]]
+}
+
+@test "manifest writer emits schema and pinned codex component" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/state.sh"; . "${0}/scripts/lib/manifest.sh"; logging_init; state_mark VERIFY_RUNTIME "unit test"; manifest_write running; python3 -m json.tool "${ZCODEX_MANIFEST_FILE}" >/dev/null; cat "${ZCODEX_MANIFEST_FILE}"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'"schema_version": 1'* ]]
+	[[ "$output" == *'"name": "codex-cli"'* ]]
+	[[ "$output" == *'"desired_version": "0.129.0"'* ]]
+}
+
+@test "pins reject unsafe apt package versions" {
+	run env ZCODEX_DOCKER_PACKAGE_VERSION='1.2.3;rm' bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate' "${REPO_ROOT}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Invalid ZCODEX_DOCKER_PACKAGE_VERSION"* ]]
+}

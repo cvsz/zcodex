@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
 # Codex CLI installation and configuration helpers.
 
+codex_installed_version() {
+	command_exists codex || return 1
+	codex --version 2>/dev/null | awk '{ print $NF; exit }'
+}
+
 codex_install_cli() {
-	if command_exists codex; then
-		log_success "Codex CLI is already installed."
+	local installed_version
+	installed_version="$(codex_installed_version 2>/dev/null || true)"
+	if [[ "${installed_version}" == "${ZCODEX_CODEX_CLI_VERSION}" ]]; then
+		log_success "Codex CLI ${installed_version} matches pin ${ZCODEX_CODEX_CLI_VERSION}."
 		return 0
 	fi
 
-	log_info "Installing @openai/codex with npm."
-	nodejs_install_global_packages @openai/codex
+	log_info "Installing @openai/codex@${ZCODEX_CODEX_CLI_VERSION} with npm."
+	nodejs_install_global_packages "@openai/codex@${ZCODEX_CODEX_CLI_VERSION}"
+
+	installed_version="$(codex_installed_version 2>/dev/null || true)"
+	if [[ -n "${installed_version}" && "${installed_version}" != "${ZCODEX_CODEX_CLI_VERSION}" ]]; then
+		log_warn "Codex CLI reported ${installed_version}; expected ${ZCODEX_CODEX_CLI_VERSION}."
+	fi
 }
 
 codex_write_config() {

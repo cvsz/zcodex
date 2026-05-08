@@ -16,6 +16,10 @@ ZCODEX_RUNTIME_LIB_DIR="${ZCODEX_RUNTIME_LIB_DIR:-$(runtime_lib_dir)}"
 . "${ZCODEX_RUNTIME_LIB_DIR}/platform.sh"
 # shellcheck source=scripts/lib/security.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/security.sh"
+# shellcheck source=scripts/lib/pins.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/pins.sh"
+# shellcheck source=scripts/lib/state.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/state.sh"
 # shellcheck source=scripts/lib/backup.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/backup.sh"
 # shellcheck source=scripts/lib/packages.sh
@@ -28,5 +32,7 @@ ZCODEX_RUNTIME_LIB_DIR="${ZCODEX_RUNTIME_LIB_DIR:-$(runtime_lib_dir)}"
 . "${ZCODEX_RUNTIME_LIB_DIR}/codex.sh"
 # shellcheck source=scripts/lib/shell.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/shell.sh"
+# shellcheck source=scripts/lib/manifest.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/manifest.sh"
 # shellcheck source=scripts/lib/installer.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/installer.sh"
