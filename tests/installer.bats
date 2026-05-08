@@ -564,7 +564,7 @@ JSON
 	[[ "${listing}" == *"1970-01-01"* || "${listing}" == *"1969-12-31"* ]]
 }
 
-@test "workflow policy rejects Bats helper action inputs in yaml workflows" {
+@test "workflow policy rejects Bats helpers, cache restores, and deprecated action majors" {
 	local tmpdir
 	tmpdir="$(zcodex_tmpdir)"
 	mkdir -p "${tmpdir}/workflows"
@@ -573,10 +573,15 @@ name: bad-bats-cache
 jobs:
   test:
     steps:
+      - uses: actions/checkout@v4
       - uses: bats-core/bats-action@3.0.1
         with:
           support-install: true
           support-path: /usr/lib/bats-support
+      - uses: actions/cache@v4
+        with:
+          path: /usr/lib/bats-support
+          key: Linux-X64-bats-support-0.3.0
 YAML
 
 	run python3 "${REPO_ROOT}/tests/workflow_policy.py" "${tmpdir}/workflows"
@@ -584,4 +589,6 @@ YAML
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"bats-core/bats-action"* ]]
 	[[ "$output" == *"support-install:"* ]]
+	[[ "$output" == *"actions/checkout@v4"* ]]
+	[[ "$output" == *"actions/cache@"* ]]
 }
