@@ -27,6 +27,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - `retry.sh` for array-based exponential backoff.
 - `platform.sh` for Ubuntu and architecture validation.
 - `runtime.sh` for consistent modular library loading.
+- `installer.sh` for CLI flag parsing, install-phase sequencing, and trap cleanup.
 - `security.sh` for tempfiles, locks, HTTPS downloads, direct checksums, and checksum manifests.
 - `backup.sh` for rollback snapshots before Codex config or shell profile changes.
 - `packages.sh`, `nodejs.sh`, `docker.sh`, `codex.sh`, and `shell.sh` for install-specific domains.
