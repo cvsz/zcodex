@@ -102,6 +102,12 @@ Start with:
 bash scripts/doctor.sh
 ```
 
-If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
+For airgapped or tightly proxied environments, skip outbound connectivity checks while still validating local runtime state:
+
+```bash
+bash scripts/doctor.sh --offline
+```
+
+Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
 
 More details are available in `docs/troubleshooting.md`.
