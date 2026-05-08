@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: install lint fmt fmt-check test doctor validate
+.PHONY: install lint fmt fmt-check test doctor validate release release-checksum
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -21,3 +21,9 @@ doctor:
 	bash scripts/doctor.sh
 
 validate: lint fmt-check test
+
+release:
+	bash scripts/release.sh
+
+release-checksum:
+	cd dist && sha256sum -c SHA256SUMS
