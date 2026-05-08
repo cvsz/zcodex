@@ -105,59 +105,17 @@ check_command() {
 	return 1
 }
 
-path_entry_is_insecure() {
-	local entry="$1"
-	local mode
-
-	[[ -d "${entry}" ]] || return 1
-	mode="$(stat -Lc '%a' "${entry}" 2>/dev/null || printf '0')"
-	# The final two permission digits are group and other. Values 2, 3, 6,
-	# and 7 include write permissions and are unsafe for executable lookup paths.
-	case "${mode: -2:1}${mode: -1}" in
-	*[2367]*) return 0 ;;
-	*) return 1 ;;
-	esac
-}
-
 check_path() {
-	local path_value="${PATH:-}"
-	local entry
-	local missing=0
-	local insecure=0
-	local invalid=0
+	local canonical
 
-	if [[ -z "${path_value}" ]]; then
-		doctor_error 'PATH is empty; commands cannot be resolved deterministically.'
-		return 1
-	fi
-
-	if [[ "${path_value}" == *::* || "${path_value}" == :* || "${path_value}" == *: ]]; then
-		doctor_warn 'PATH contains an empty entry, which resolves to the current directory. Remove empty PATH segments.'
-		invalid=1
-	fi
-
-	while IFS= read -r -d '' entry; do
-		[[ -n "${entry}" ]] || continue
-		if [[ ! -d "${entry}" ]]; then
-			doctor_warn "PATH entry does not exist: ${entry}. Remove stale entries from your shell profile."
-			missing=1
-			continue
-		fi
-		if path_entry_is_insecure "${entry}"; then
-			doctor_error "PATH entry is group/other writable: ${entry}. Fix permissions before running privileged installs."
-			insecure=1
-		fi
-	done < <(printf '%s' "${path_value}" | tr ':' '\0')
-
-	if ((missing == 0 && insecure == 0 && invalid == 0)); then
-		doctor_ok 'PATH entries are present and not group/other writable.'
+	if security_validate_path "${PATH:-}"; then
+		canonical="$(security_canonicalize_path "${PATH:-}")"
+		doctor_ok "PATH is strict and canonicalizable: ${canonical}"
 		return 0
 	fi
 
-	if ((insecure > 0)); then
-		return 1
-	fi
-	return 0
+	doctor_error 'PATH failed strict validation. Use absolute, existing, non-user-writable directories and remove empty segments.'
+	return 1
 }
 
 check_shell() {

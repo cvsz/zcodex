@@ -13,6 +13,16 @@ state_dir_default() {
 	printf '%s\n' "${ZCODEX_STATE_DIR}"
 }
 
+state_atomic_write() {
+	local target="$1"
+	local content="$2"
+	local tmp
+	tmp="${target}.$$.tmp"
+	printf '%s\n' "${content}" >"${tmp}"
+	chmod 600 "${tmp}"
+	mv "${tmp}" "${target}"
+}
+
 state_install_id_file() {
 	local state_dir="${1:-$(state_dir_default)}"
 	printf '%s/install_id\n' "${state_dir}"
@@ -40,8 +50,7 @@ state_init() {
 	install -d -m 700 "${state_home}" "${state_dir}"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
 	ZCODEX_INSTALL_ID="${install_id}"
-	printf '%s\n' "${install_id}" >"$(state_install_id_file "${state_dir}")"
-	chmod 600 "$(state_install_id_file "${state_dir}")"
+	state_atomic_write "$(state_install_id_file "${state_dir}")" "${install_id}"
 }
 
 state_valid_phase() {
@@ -83,8 +92,7 @@ state_write_status_in() {
 	local status="$3"
 
 	state_init "${state_home}" "${state_dir}"
-	printf '%s\n' "${status}" >"$(state_status_file "${state_dir}")"
-	chmod 600 "$(state_status_file "${state_dir}")"
+	state_atomic_write "$(state_status_file "${state_dir}")" "${status}"
 }
 
 state_write_status() {
@@ -121,8 +129,7 @@ state_mark_in() {
 	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	state_init "${state_home}" "${state_dir}"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
-	printf '%s\n' "${phase}" >"$(state_phase_file "${state_dir}")"
-	chmod 600 "$(state_phase_file "${state_dir}")"
+	state_atomic_write "$(state_phase_file "${state_dir}")" "${phase}"
 	state_write_status_in "${state_home}" "${state_dir}" "${status}"
 	printf '%s phase=%s status=%s install_id=%s message=%s\n' "${now}" "${phase}" "${status}" "${install_id}" "${message}" >>"$(state_history_file "${state_dir}")"
 	chmod 600 "$(state_history_file "${state_dir}")"
@@ -151,8 +158,7 @@ state_complete_phase_in() {
 	install -d -m 700 "$(state_completed_dir "${state_dir}")"
 	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
-	printf '%s\n' "${now}" >"$(state_phase_completed_file "${phase}" "${state_dir}")"
-	chmod 600 "$(state_phase_completed_file "${phase}" "${state_dir}")"
+	state_atomic_write "$(state_phase_completed_file "${phase}" "${state_dir}")" "${now}"
 	printf '%s phase=%s status=completed install_id=%s message=phase-complete\n' "${now}" "${phase}" "${install_id}" >>"$(state_history_file "${state_dir}")"
 }
 

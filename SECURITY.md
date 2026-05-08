@@ -48,3 +48,8 @@ Security-sensitive project areas include:
 ## Out of scope
 
 The project does not provide a sandbox for arbitrary model-generated commands, does not store API keys, and does not replace host hardening. Users remain responsible for reviewing commands before running installer scripts on production systems.
+
+## Hardening architecture references
+
+- See [THREAT_MODEL.md](THREAT_MODEL.md) for assets, trust boundaries, and attack-surface mitigations.
+- See [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) for PATH, privilege, runtime ownership, manifest, and release security architecture.

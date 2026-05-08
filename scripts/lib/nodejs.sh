@@ -260,7 +260,7 @@ nodejs_runtime_conflict_report() {
 			printf 'fatal|clean-system mode found unowned or unknown Node.js/npm binaries (%s/%s)|Remove unmanaged binaries from PATH or use --runtime-mode existing-runtime with a verifiable runtime.\n' "${node_owner}" "${npm_owner}"
 		fi
 		;;
-	existing-runtime | developer)
+	existing-runtime | developer | production)
 		if [[ "${node_owner}" == "absent" || "${npm_owner}" == "absent" ]]; then
 			printf 'fatal|existing runtime mode requires node and npm to be preinstalled|Activate or install your Node.js runtime first, then rerun with --runtime-mode %s.\n' "${mode}"
 		elif ! nodejs_version_matches_pin "${node_version}"; then
@@ -275,7 +275,7 @@ nodejs_runtime_conflict_report() {
 		fi
 		;;
 	*)
-		printf 'fatal|invalid runtime mode %s|Use one of: clean-system, existing-runtime, ci, developer.\n' "${mode}"
+		printf 'fatal|invalid runtime mode %s|Use one of: clean-system, existing-runtime, ci, developer, production.\n' "${mode}"
 		;;
 	esac
 }
@@ -323,7 +323,7 @@ nodejs_install_managed() {
 	installed_version="$(nodejs_audit_value "${audit}" node_version)"
 
 	case "${ZCODEX_RUNTIME_MODE}" in
-	existing-runtime | developer | ci)
+	existing-runtime | developer | production | ci)
 		if [[ "${installed_version}" != "absent" ]] && nodejs_version_matches_pin "${installed_version}"; then
 			log_success "Using existing Node.js v${installed_version} from ${node_owner}."
 			return 0
@@ -384,7 +384,7 @@ nodejs_install_global_packages() {
 		retry 3 2 npm install --global "${packages[@]}"
 		return $?
 	fi
-	retry 3 2 sudo npm install --global "${packages[@]}"
+	retry 3 2 runtime_privileged npm install --global "${packages[@]}"
 }
 
 nodejs_install_ubuntu() {

@@ -28,3 +28,24 @@ runtime_trap_install_exit() {
 	# shellcheck disable=SC2064 # The handler name is intentionally captured at install time.
 	trap "${handler}" EXIT
 }
+
+runtime_privileged() {
+	local sudo_path
+	if [[ "${EUID}" -eq 0 ]]; then
+		env PATH="${ZCODEX_SECURE_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}" "$@"
+		return $?
+	fi
+	if ! runtime_command_exists sudo; then
+		log_error "sudo is required for privileged command: $*"
+		return 1
+	fi
+	sudo_path="$(command -v sudo)"
+	case "${sudo_path}" in
+	/usr/bin/sudo | /bin/sudo) ;;
+	*)
+		log_error "Refusing sudo outside trusted system paths: ${sudo_path}"
+		return 1
+		;;
+	esac
+	"${sudo_path}" env PATH="${ZCODEX_SECURE_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}" "$@"
+}

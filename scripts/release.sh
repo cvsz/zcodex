@@ -145,6 +145,28 @@ when repository signing keys, OIDC policy, and SBOM ownership are finalized.
 SIGNING
 }
 
+release_archive_stream() {
+	local version="$1"
+	local tag="v${version}"
+	git -C "${REPO_ROOT}" archive --format=tar --prefix="zcodex-${tag}/" "${GIT_REF}" | gzip -n
+}
+
+verify_reproducible_archive() {
+	local version="$1"
+	local archive_path="$2"
+	local probe_path="${archive_path}.repro"
+	local first_sha second_sha
+
+	release_archive_stream "${version}" >"${probe_path}"
+	first_sha="$(sha256sum "${archive_path}" | awk '{ print $1 }')"
+	second_sha="$(sha256sum "${probe_path}" | awk '{ print $1 }')"
+	rm -f "${probe_path}"
+	if [[ "${first_sha}" != "${second_sha}" ]]; then
+		fail "release archive is not reproducible across repeated builds"
+	fi
+	log "Reproducibility check passed: ${first_sha}"
+}
+
 build_archive() {
 	local version="$1"
 	local tag="v${version}"
@@ -154,7 +176,8 @@ build_archive() {
 	local signing_notes="${OUTPUT_DIR}/SIGNING_INSTRUCTIONS.md"
 
 	log "Building deterministic archive: ${archive_name}"
-	git -C "${REPO_ROOT}" archive --format=tar --prefix="zcodex-${tag}/" "${GIT_REF}" | gzip -n >"${archive_path}"
+	release_archive_stream "${version}" >"${archive_path}"
+	verify_reproducible_archive "${version}" "${archive_path}"
 
 	log "Generating SHA256SUMS"
 	(

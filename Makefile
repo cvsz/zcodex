@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check test doctor validate release release-checksum
+.PHONY: install deps-dev validate-env lint fmt fmt-check test doctor validate ci-local release release-checksum
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -27,6 +27,10 @@ doctor:
 	bash scripts/doctor.sh
 
 validate: validate-env lint fmt-check test
+
+ci-local: validate
+	bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
+	scripts/release.sh --skip-validate
 
 release:
 	bash scripts/release.sh

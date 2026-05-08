@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## v0.2.0 - 2026-05-08
+
+### Added
+
+- Threat model and security architecture documents for installer trust boundaries, privilege separation, runtime ownership, and release integrity.
+- Manifest schema version 2 with runtime audit metadata, environment mode, PATH verification hash, and append-only install records.
+- CI matrix coverage for Ubuntu 22.04, Ubuntu 24.04, and arm64 validation where hosted runners are available.
+
+### Changed
+
+- Hardened installer PATH validation and canonicalization before mutable install phases.
+- Routed privileged apt and global npm operations through a shared secure execution boundary.
+- Added deterministic release reproducibility verification to the release script.
+- Added explicit `production` runtime mode as a no-implicit-mutation existing-runtime policy.
+
+### Security
+
+- Reject shadowed sudo paths and execute privileged commands with a fixed secure PATH.
+- Validate manifest schema before publication and record manifest digests immutably.
+- Strengthened SHA-256 validation error reporting and checksum manifest parsing.
+
 ### Added
 
 - Root MIT license file and license verification guidance.

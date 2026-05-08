@@ -20,7 +20,7 @@ Usage: ${SCRIPT_NAME} [OPTIONS]
 Options:
   --ci              Non-interactive CI mode; skips shell profile changes and uses runtime mode ci.
   --runtime-mode MODE
-                    Runtime ownership policy: clean-system, existing-runtime, ci, or developer.
+                    Runtime ownership policy: clean-system, existing-runtime, ci, developer, or production.
   --dry-run         Validate runtime capabilities and print the planned install flow.
   --skip-docker     Skip Docker installation and group configuration.
   --skip-optional   Skip optional npm packages.
@@ -42,7 +42,7 @@ installer_parse_args() {
 				return 2
 			fi
 			case "$1" in
-			clean-system | existing-runtime | ci | developer) ZCODEX_RUNTIME_MODE="$1" ;;
+			clean-system | existing-runtime | ci | developer | production) ZCODEX_RUNTIME_MODE="$1" ;;
 			*)
 				log_error "Invalid runtime mode: $1"
 				return 2
@@ -155,7 +155,7 @@ installer_verify_inputs() {
 	fi
 	pins_validate
 	case "${ZCODEX_RUNTIME_MODE}" in
-	clean-system | existing-runtime | ci | developer) ;;
+	clean-system | existing-runtime | ci | developer | production) ;;
 	*)
 		log_error "Invalid runtime mode: ${ZCODEX_RUNTIME_MODE}"
 		return 1
@@ -226,6 +226,11 @@ installer_run() {
 	log_section "zcodex installer"
 
 	platform_validate
+	if [[ "${ZCODEX_ALLOW_INSECURE_PATH:-false}" != "true" ]]; then
+		security_export_canonical_path
+	else
+		log_warn "Skipping strict PATH validation because ZCODEX_ALLOW_INSECURE_PATH=true."
+	fi
 	pins_validate
 	installer_planned_steps
 
