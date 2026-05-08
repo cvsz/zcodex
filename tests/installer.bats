@@ -150,3 +150,16 @@ SH
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"600"* ]]
 }
+
+@test "release orchestrator help renders usage" {
+	run bash "${REPO_ROOT}/codex.sh" --help
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Usage:"* ]]
+}
+
+@test "release orchestrator dry-run basic mode delegates to installer" {
+	run env ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Running Basic Installation"* ]]
+	[[ "$output" == *"Dry run completed without making changes"* ]]
+}

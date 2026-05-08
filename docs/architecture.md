@@ -4,7 +4,8 @@
 
 ## Layout
 
-- `scripts/install-codex-ubuntu.sh` is the orchestration entry point.
+- `scripts/install-codex-ubuntu.sh` is the installation orchestration entry point.
+- `codex.sh` is the release-style meta-orchestrator for basic, full, ultimate, doctor-only, and release validation flows.
 - `scripts/lib/*.sh` contains reusable runtime functions.
 - `tests/` contains Bats and shellcheck entry points.
 - `.github/workflows/` contains CI validation for linting, installer behavior, and security scanning.
@@ -12,7 +13,7 @@
 
 ## Runtime boundaries
 
-`scripts/install-codex-ubuntu.sh` stays a thin entry point that establishes repository paths, loads `runtime.sh`, installs the cleanup trap, and delegates to `installer_run`. The installer runtime library owns flag parsing, phase sequencing, dry-run behavior, optional component gates, and completion reporting. Domain libraries own implementation details for logging, retries, package installation, security primitives, Node.js, Docker, Codex, and shell integration.
+`scripts/install-codex-ubuntu.sh` stays a thin entry point that establishes repository paths, loads `runtime.sh`, installs the cleanup trap, and delegates to `installer_run`. `codex.sh` stays outside the installer runtime and composes the existing installer, validator, and doctor scripts without duplicating install logic. The installer runtime library owns flag parsing, phase sequencing, dry-run behavior, optional component gates, and completion reporting. Domain libraries own implementation details for logging, retries, package installation, security primitives, Node.js, Docker, Codex, and shell integration.
 
 ## Design goals
 

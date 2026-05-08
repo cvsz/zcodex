@@ -6,13 +6,13 @@ install:
 	bash scripts/install-codex-ubuntu.sh
 
 lint:
-	find scripts tests -type f -name '*.sh' -print0 | xargs -0 shellcheck
+	{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0; } | xargs -0 shellcheck
 
 fmt:
-	shfmt -w scripts tests
+	shfmt -w codex.sh scripts tests
 
 fmt-check:
-	shfmt -d scripts tests
+	shfmt -d codex.sh scripts tests
 
 test:
 	bats tests
