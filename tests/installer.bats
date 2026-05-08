@@ -205,6 +205,13 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	[[ "$output" == *"Dry run completed without making changes"* ]]
 }
 
+@test "release orchestrator prefers explicit release log" {
+	run env -u NVM_DIR HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" LOG_FILE="${BATS_TEST_TMPDIR}/missing/ambient.log" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	[ "$status" -eq 0 ]
+	[ -s "${BATS_TEST_TMPDIR}/release.log" ]
+	[ ! -e "${BATS_TEST_TMPDIR}/missing/ambient.log" ]
+}
+
 @test "pins validate default deterministic versions" {
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate; pins_summary' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
