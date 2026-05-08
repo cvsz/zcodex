@@ -6,9 +6,7 @@ install:
 	bash scripts/install-codex-ubuntu.sh
 
 deps-dev:
-	@echo "Installing zcodex development dependencies with apt..."
-	sudo apt update
-	sudo apt install -y bash git curl shellcheck shfmt bats tar coreutils
+	bash -c '. scripts/lib/dependencies.sh; install_dev_dependencies_ubuntu'
 
 validate-env:
 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'

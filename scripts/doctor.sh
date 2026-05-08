@@ -194,6 +194,28 @@ check_permissions() {
 	doctor_warn 'sudo is unavailable or requires interaction; installer package operations may pause for credentials.'
 }
 
+check_release_tooling() {
+	local command_name
+	local missing=0
+
+	doctor_info 'Checking development/release tooling. Missing tools are WARN by default; run make validate-env for a hard gate.'
+	for command_name in shellcheck shfmt bats tar sha256sum; do
+		if runtime_command_exists "${command_name}"; then
+			doctor_ok "$(dependency_command_description "${command_name}") found: $(command -v "${command_name}")"
+			continue
+		fi
+
+		doctor_warn "$(dependency_command_description "${command_name}") is missing. $(dependency_install_hint "${command_name}")"
+		missing=$((missing + 1))
+	done
+
+	if ((missing > 0)); then
+		doctor_info 'Ubuntu remediation for development and release tooling: make deps-dev'
+	else
+		doctor_ok 'Development and release tooling is available.'
+	fi
+}
+
 check_network() {
 	if [[ "${OFFLINE_MODE}" == "true" ]]; then
 		doctor_warn 'Skipping network check because --offline was provided.'
@@ -330,6 +352,7 @@ run_checks() {
 	check_command bash || true
 	check_command curl || true
 	check_command git || true
+	check_release_tooling || true
 	check_command node optional || true
 	check_command npm optional || true
 	check_command codex optional || true
