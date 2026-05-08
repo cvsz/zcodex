@@ -61,7 +61,16 @@ jobs:
           python3 --version
           make validate-env
       - name: Bash syntax checks
-        run: bash -n scripts/*.sh scripts/lib/*.sh tests/*.sh
+        run: bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh
+      - name: Release orchestrator smoke tests
+        env:
+          PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        run: |
+          set -euo pipefail
+          ./codex.sh --help
+          CI=true ./codex.sh basic --dry-run --skip-docker --skip-optional
+          CI=true ./codex.sh full --dry-run --skip-docker --skip-optional
+          CI=true ./codex.sh orchestrator --offline
       - name: Run tests
         run: make test
       - name: Installer dry run
