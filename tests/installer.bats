@@ -78,6 +78,18 @@ SH
 	[[ "$output" == *"ERROR=1"* ]]
 }
 
+@test "doctor CI mode sanitizes unsafe runner PATH" {
+	local tmpbin
+	tmpbin="$(zcodex_tmpdir)"
+	chmod 700 "${tmpbin}"
+	run env CI=true PATH="${tmpbin}:/usr/bin:/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; WARN_COUNT=0; ERROR_COUNT=0; doctor_prepare_command_path; check_path; printf "PATH=%s\nERROR=%s WARN=%s\n" "${PATH}" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"CI mode detected; replacing PATH"* ]]
+	[[ "$output" == *"PATH=/usr/sbin:/usr/bin:/sbin:/bin"* ]]
+	[[ "$output" == *"ERROR=0 WARN=0"* ]]
+}
+
 @test "doctor treats docker as optional" {
 	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; WARN_COUNT=0; ERROR_COUNT=0; check_command docker optional; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
