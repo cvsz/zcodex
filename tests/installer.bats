@@ -186,7 +186,7 @@ SH
 }
 
 @test "release orchestrator dry-run basic mode delegates to installer" {
-	run env ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	run env -u NVM_DIR HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Running Basic Installation"* ]]
 	[[ "$output" == *"Dry run completed without making changes"* ]]
@@ -323,4 +323,58 @@ true ci'* ]]
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/retry.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_audit() { printf "node_owner=user-nvm\nnpm_owner=user-nvm\n"; }; nodejs_install_global_packages example-package' "${REPO_ROOT}"
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"Refusing to install global npm packages into user-managed runtime"* ]]
+}
+
+@test "runtime ownership uses dpkg package owner for npm verification" {
+	local tmpbin
+	tmpbin="$(mktemp -d)"
+	cat >"${tmpbin}/dpkg-query" <<'SH'
+#!/usr/bin/env bash
+if [[ "$1" == "-S" && "$2" == "/usr/bin/npm" ]]; then
+	printf 'npm: /usr/bin/npm\n'
+	exit 0
+fi
+if [[ "$1" == "-S" && "$2" == "/usr/bin/node" ]]; then
+	printf 'nodejs: /usr/bin/node\n'
+	exit 0
+fi
+if [[ "$1" == "-W" && "$4" == "nodejs" ]]; then
+	printf 'install ok installed'
+	exit 0
+fi
+exit 1
+SH
+	cat >"${tmpbin}/apt-cache" <<'SH'
+#!/usr/bin/env bash
+cat <<POLICY
+nodejs:
+  Candidate: 22.0.0-1nodesource1
+  Version table:
+     22.0.0-1nodesource1 500
+        release o=NodeSource
+POLICY
+SH
+	chmod +x "${tmpbin}/dpkg-query" "${tmpbin}/apt-cache"
+	run env PATH="${tmpbin}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_owner_for_path /usr/bin/npm; nodejs_owner_for_path /usr/bin/node' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'system-apt-distro
+system-apt-nodesource'* ]]
+}
+
+@test "runtime conflict report rejects clean-system unowned active binaries" {
+	local audit
+	audit=$'mode=clean-system\nnode_path=/usr/local/bin/node\nnode_version=22.1.0\nnode_owner=system-unowned\nnode_package=unknown\nnode_path_count=1\nnpm_path=/usr/local/bin/npm\nnpm_version=10.0.0\nnpm_owner=system-unowned\nnpm_package=unknown\nnpm_path_count=1\nnvm_detected=false\nasdf_detected=false\napt_nodejs=false\nnodesource_nodejs=false\ndistro_npm=false\nnode_paths=/usr/local/bin/node\nnpm_paths=/usr/local/bin/npm'
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_conflict_report "${1}"' "${REPO_ROOT}" "${audit}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"fatal|clean-system mode found unowned or unknown Node.js/npm binaries"* ]]
+	[[ "$output" == *"warn|npm package ownership could not be verified"* ]]
+}
+
+@test "runtime conflict report enforces ci node pin" {
+	local audit
+	audit=$'mode=ci\nnode_path=/usr/bin/node\nnode_version=20.1.0\nnode_owner=system-apt-distro\nnode_package=nodejs\nnode_path_count=1\nnpm_path=/usr/bin/npm\nnpm_version=10.0.0\nnpm_owner=system-apt-distro\nnpm_package=npm\nnpm_path_count=1\nnvm_detected=false\nasdf_detected=false\napt_nodejs=true\nnodesource_nodejs=false\ndistro_npm=true\nnode_paths=/usr/bin/node\nnpm_paths=/usr/bin/npm'
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_conflict_report "${1}"' "${REPO_ROOT}" "${audit}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"fatal|ci Node.js version v20.1.0 does not satisfy pin 22"* ]]
 }

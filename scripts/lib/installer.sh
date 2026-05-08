@@ -226,6 +226,8 @@ installer_run() {
 	installer_planned_steps
 
 	if [[ "${DRY_RUN}" == "true" ]]; then
+		installer_verify_inputs
+		installer_runtime_audit
 		log_success "Dry run completed without making changes."
 		return 0
 	fi
