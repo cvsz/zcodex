@@ -48,3 +48,33 @@ SH
 	[ "$status" -eq 0 ]
 	[ "$output" = "containerd" ]
 }
+
+@test "doctor help renders usage" {
+	run bash "${REPO_ROOT}/scripts/doctor.sh" --help
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Usage:"* ]]
+}
+
+@test "doctor offline mode skips network check" {
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; OFFLINE_MODE=true; check_network' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Skipping network check"* ]]
+}
+
+@test "doctor flags empty PATH entries" {
+	local tmpbin
+	tmpbin="$(mktemp -d)"
+	chmod 755 "${tmpbin}"
+	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; FAILED=0; check_path || true; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"empty entry"* ]]
+	[[ "$output" == *"FAILED=1"* ]]
+}
+
+@test "doctor treats docker as optional" {
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; command_exists() { return 1; }; FAILED=0; check_command docker optional; printf "FAILED=%s\n" "${FAILED}"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"docker is missing (optional)"* ]]
+	[[ "$output" == *"FAILED=0"* ]]
+}
