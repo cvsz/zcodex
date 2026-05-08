@@ -6,14 +6,14 @@
 
 - `scripts/install-codex-ubuntu.sh` is the installation orchestration entry point.
 - `codex.sh` is the release-style meta-orchestrator for basic, full, ultimate, doctor-only, and release validation flows.
-- `scripts/lib/*.sh` contains reusable runtime functions, including the capability registry, manifest, pin, and state helpers.
+- `scripts/lib/*.sh` contains reusable runtime functions, including execution wrappers, the capability registry, manifest, pin, and state helpers.
 - `tests/` contains Bats and shellcheck entry points.
 - `.github/workflows/` contains CI validation for linting, installer behavior, and security scanning.
 - `docs/` records architecture, runtime, troubleshooting, and security expectations.
 
 ## Runtime boundaries
 
-`scripts/install-codex-ubuntu.sh` stays a thin entry point that establishes repository paths, loads `runtime.sh`, installs the cleanup trap, and delegates to `installer_run`. `codex.sh` stays outside the installer runtime and composes the existing installer, validator, and doctor scripts without duplicating install logic. The installer runtime library owns flag parsing, phase sequencing, dry-run behavior, optional component gates, and completion reporting. Platform-specific decisions are expressed as runtime capabilities rather than distro-specific installer branches. Domain libraries own implementation details for logging, retries, package installation, security primitives, Node.js, Docker, Codex, and shell integration.
+`scripts/install-codex-ubuntu.sh` stays a thin entry point that establishes namespaced repository paths, loads `runtime.sh`, installs the cleanup trap through the shared runtime helper, and delegates to `installer_run`. `codex.sh` stays outside the installer runtime and composes the existing installer, validator, and doctor scripts without duplicating install logic. The installer runtime library owns flag parsing, phase sequencing, dry-run behavior, optional component gates, and completion reporting. Platform-specific decisions are expressed as runtime capabilities rather than distro-specific installer branches. Domain libraries own implementation details for logging, retries, package installation, security primitives, Node.js, Docker, Codex, and shell integration.
 
 ## Design goals
 
@@ -31,3 +31,8 @@ Installer runs write phase state below `${HOME}/.local/share/zcodex/state` and a
 ## Capability-driven platform abstraction
 
 `platform.sh` now separates host identity from install decisions. It still reports OS release, architecture, WSL status, and container context for supportability, but install phases depend on four capabilities: `supports_apt`, `supports_systemd`, `supports_docker`, and `supports_rootless`. Ubuntu 22.04 and 24.04 remain the primary supported targets. Other hosts are not given distro-specific branches; if required capabilities are present, zcodex emits an unsupported best-effort warning and runs the same deterministic managed package path. See `docs/capabilities.md` for the capability model, examples, migration plan, and maintainability analysis.
+
+
+## Bash runtime state model
+
+The runtime keeps Bash as the orchestration language while reducing ambient coupling. Entry points use namespaced `ZCODEX_*` process variables for paths and logs. Reusable libraries expose explicit functions, such as `state_mark_in` and `state_complete_phase_in`, when callers already know the state home and state directory. Compatibility wrappers remain for existing scripts. See `docs/runtime-refactor.md` for the full audit, refactor plan, implementation examples, maintainability analysis, and migration guidance.

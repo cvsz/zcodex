@@ -8,6 +8,8 @@ runtime_lib_dir() {
 
 ZCODEX_RUNTIME_LIB_DIR="${ZCODEX_RUNTIME_LIB_DIR:-$(runtime_lib_dir)}"
 
+# shellcheck source=scripts/lib/exec.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/exec.sh"
 # shellcheck source=scripts/lib/logging.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/logging.sh"
 # shellcheck source=scripts/lib/retry.sh
