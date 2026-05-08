@@ -186,6 +186,9 @@ SH
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'"schema_version": 1'* ]]
+	[[ "$output" == *'"installer_version": "0.2.0"'* ]]
+	[[ "$output" == *'"install_state": {'* ]]
+	[[ "$output" == *'"verification_hashes": {'* ]]
 	[[ "$output" == *'"name": "codex-cli"'* ]]
 	[[ "$output" == *'"desired_version": "0.129.0"'* ]]
 }
@@ -194,4 +197,23 @@ SH
 	run env ZCODEX_DOCKER_PACKAGE_VERSION='1.2.3;rm' bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate' "${REPO_ROOT}"
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"Invalid ZCODEX_DOCKER_PACKAGE_VERSION"* ]]
+}
+
+@test "state machine rejects invalid phases and marks completed phases" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark INSTALL "unit test" running; state_complete_phase INSTALL; state_phase_completed INSTALL; ! state_mark UNKNOWN "bad"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Invalid install phase"* ]]
+}
+
+@test "installer resume skips completed install phase" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/runtime.sh"; logging_init; state_mark INSTALL "interrupted" running; state_complete_phase INSTALL; INSTALLER_PREVIOUS_PHASE=INSTALL; installer_prepare_recovery; installer_run_phase INSTALL "install core runtime" bash -c "echo should-not-run; exit 3"; printf "phase=%s\n" "$(state_current_phase)"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Skipping INSTALL"* ]]
+	[[ "$output" != *"should-not-run"* ]]
 }

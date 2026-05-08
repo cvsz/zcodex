@@ -102,12 +102,14 @@ manifest_component_status() {
 manifest_write() {
 	local status="$1"
 	local node_version npm_version docker_version compose_version codex_version
-	local node_sha npm_sha docker_sha codex_sha
-	local written_at current_phase
+	local node_sha npm_sha docker_sha codex_sha manifest_sha
+	local written_at current_phase current_status install_timestamp
 
 	install -d -m 700 "$(dirname "${ZCODEX_MANIFEST_FILE}")"
 	written_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	install_timestamp="${ZCODEX_INSTALL_TIMESTAMP:-${written_at}}"
 	current_phase="$(state_current_phase 2>/dev/null || printf '%s' UNKNOWN)"
+	current_status="$(state_status 2>/dev/null || printf '%s' "${status}")"
 	node_version="$(manifest_command_version node --version || true)"
 	npm_version="$(manifest_command_version npm --version || true)"
 	docker_version="$(manifest_command_version docker --version || true)"
@@ -117,10 +119,34 @@ manifest_write() {
 	npm_sha="$(manifest_sha256_for_command npm || true)"
 	docker_sha="$(manifest_sha256_for_command docker || true)"
 	codex_sha="$(manifest_sha256_for_command codex || true)"
+	manifest_sha="$(printf '%s|%s|%s|%s|%s|%s' "${ZCODEX_INSTALLER_VERSION}" "${ZCODEX_NODEJS_VERSION}" "${ZCODEX_DOCKER_PACKAGE_VERSION:-ubuntu-candidate}" "${ZCODEX_CODEX_CLI_VERSION}" "$(platform_arch_normalized)" "${current_phase}" | sha256sum | awk '{ print $1 }')"
 
 	cat >"${ZCODEX_MANIFEST_FILE}.tmp" <<JSON
 {
   "schema_version": 1,
+  "installer_version": $(manifest_json_string "${ZCODEX_INSTALLER_VERSION}"),
+  "node_version": $(manifest_json_nullable "${node_version}"),
+  "docker_version": $(manifest_json_nullable "${docker_version}"),
+  "codex_version": $(manifest_json_nullable "${codex_version}"),
+  "install_timestamp": $(manifest_json_string "${install_timestamp}"),
+  "platform_info": {
+    "os_release": $(manifest_json_string "$(platform_os_release_file)"),
+$(manifest_platform_json | sed '1d;$d')
+  },
+  "architecture": $(manifest_json_string "$(platform_arch_normalized)"),
+  "install_state": {
+    "phase": $(manifest_json_string "${current_phase}"),
+    "status": $(manifest_json_string "${current_status}"),
+    "install_id": $(manifest_json_string "${ZCODEX_INSTALL_ID:-unknown}"),
+    "state_dir": $(manifest_json_string "${ZCODEX_STATE_DIR}")
+  },
+  "verification_hashes": {
+    "manifest_inputs": $(manifest_json_string "${manifest_sha}"),
+    "node": $(manifest_json_nullable "${node_sha}"),
+    "npm": $(manifest_json_nullable "${npm_sha}"),
+    "docker": $(manifest_json_nullable "${docker_sha}"),
+    "codex": $(manifest_json_nullable "${codex_sha}")
+  },
   "installer": {
     "name": "zcodex",
     "version": $(manifest_json_string "${ZCODEX_INSTALLER_VERSION}"),

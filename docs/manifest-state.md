@@ -1,224 +1,155 @@
-# Deterministic Manifests and Install State
+# Deterministic install manifest and state tracking
 
-## Executive summary
+This installer uses a small file-based state machine instead of a framework.  The
+state directory is `~/.local/share/zcodex/state`, and the audit manifest is
+`~/.local/share/zcodex/manifest.json`.
 
-`zcodex` now records what it intended to install, what it observed after installation, and where the installer stopped. The implementation is intentionally small: version pins live in `scripts/lib/pins.sh`, phase state lives under `${HOME}/.local/share/zcodex/state`, and the machine-readable manifest is written to `${HOME}/.local/share/zcodex/manifest.json`.
+## Architecture proposal
 
-The design favors deterministic repair over package-manager complexity. The installer always replays the same explicit phases, validates configured pins, updates the state file before mutating each area, and writes a final manifest on success or failure.
+The implementation has four shell modules:
 
-## Architecture review
+- `scripts/lib/state.sh` owns the install state machine, phase history, status,
+  install id, and resumable phase markers.
+- `scripts/lib/manifest.sh` writes a deterministic JSON snapshot after each
+  phase and at terminal states.
+- `scripts/lib/installer.sh` orchestrates phases and performs interrupted-run
+  recovery before mutable operations.
+- `scripts/doctor.sh --repair` performs state-aware local repairs without
+  re-running package installation implicitly.
 
-The existing project already separates orchestration from domain libraries. The new state layer preserves that shape:
-
-- `installer.sh` owns phase sequencing and decides when a phase starts.
-- `pins.sh` owns immutable desired versions for managed dependencies.
-- `state.sh` owns the current phase and append-only phase history.
-- `manifest.sh` owns JSON emission and observed runtime metadata.
-- Existing domain libraries (`nodejs.sh`, `docker.sh`, `codex.sh`) consume pins instead of inventing local version policy.
-
-No plugin system or package database is introduced. The manifest is an operational record, not an independent package manager.
-
-## Proposed design
-
-### Version pinning
-
-Default pins are shell variables with environment overrides for CI and controlled rollouts:
-
-- `ZCODEX_INSTALLER_VERSION`
-- `ZCODEX_NODEJS_VERSION`
-- `ZCODEX_NODEJS_PACKAGE_VERSION`
-- `ZCODEX_DOCKER_PACKAGE_VERSION`
-- `ZCODEX_DOCKER_COMPOSE_PACKAGE_VERSION`
-- `ZCODEX_CODEX_CLI_VERSION`
-
-`ZCODEX_CODEX_CLI_VERSION` is exact because npm accepts `@openai/codex@<version>`. Node.js is validated against the configured semver or major-version pin after install. Ubuntu Docker package versions are optional exact apt pins because exact package versions vary by Ubuntu release and mirror; when unset, the manifest records the Ubuntu candidate that was actually installed.
-
-### Manifest
-
-The manifest is JSON, mode `600`, and replaced atomically through a temporary file plus `mv`. It contains installer metadata, platform metadata, current state, component versions, package versions, and hashes for command paths when readable.
-
-### State tracking
-
-The state tracker writes:
-
-- `state/current_phase` with the latest phase.
-- `state/history.log` with UTC timestamp, phase, install id, and message.
-- `state/install_id` with the run identifier.
-
-The installer records phases before each mutable section so interrupted runs can be diagnosed and re-run deterministically.
-
-## File layout
+The state machine phases are intentionally linear:
 
 ```text
-${HOME}/.local/share/zcodex/
-├── manifest.json
-└── state/
-    ├── current_phase
-    ├── history.log
-    └── install_id
+VALIDATE -> DOWNLOAD -> VERIFY -> INSTALL -> CONFIGURE -> VERIFY_RUNTIME -> COMPLETE
+                                                              \-> FAILED
 ```
 
-Repository additions:
-
-```text
-scripts/lib/pins.sh       # version pin definitions and validation
-scripts/lib/state.sh      # phase tracking
-scripts/lib/manifest.sh   # manifest JSON writer
-docs/manifest-state.md    # design and operations guide
-```
+`INSTALL` and `CONFIGURE` are marked complete after success.  If a process is
+interrupted, the next run reads `current_phase`, `status`, `history.log`, and
+`completed.d/*`, reruns validation, lock/workspace setup, and verification, then
+skips completed mutable phases when safe.
 
 ## Manifest schema
 
-Schema version `1` is intentionally compact:
+The canonical manifest path is:
+
+```text
+~/.local/share/zcodex/manifest.json
+```
+
+Top-level fields required for auditing are:
 
 ```json
 {
   "schema_version": 1,
-  "installer": {
-    "name": "zcodex",
-    "version": "0.2.0",
-    "install_id": "20260508T120000Z-1234",
-    "written_at": "2026-05-08T12:00:00Z"
-  },
-  "platform": {
-    "os": "Ubuntu 24.04 LTS",
+  "installer_version": "0.2.0",
+  "node_version": "v22.x.y",
+  "docker_version": "Docker version ...",
+  "codex_version": "codex ...",
+  "install_timestamp": "2026-05-08T00:00:00Z",
+  "platform_info": {
+    "os_release": "/etc/os-release",
+    "os": "Ubuntu ...",
     "id": "ubuntu",
     "version_id": "24.04",
     "arch": "x86_64",
     "normalized_arch": "amd64",
     "container_runtime": "none"
   },
-  "state": {
-    "phase": "COMPLETE",
-    "status": "complete"
+  "architecture": "amd64",
+  "install_state": {
+    "phase": "VERIFY_RUNTIME",
+    "status": "running",
+    "install_id": "20260508T000000Z-1234",
+    "state_dir": "/home/user/.local/share/zcodex/state"
   },
-  "components": [
-    {
-      "name": "nodejs",
-      "desired_version": "22",
-      "installed_version": "v22.16.0",
-      "status": "installed",
-      "sha256": "..."
-    }
-  ],
-  "packages": {
-    "nodejs": "...",
-    "npm": "...",
-    "docker.io": "...",
-    "docker-compose-plugin": "..."
+  "verification_hashes": {
+    "manifest_inputs": "sha256...",
+    "node": "sha256...",
+    "npm": "sha256...",
+    "docker": "sha256...",
+    "codex": "sha256..."
   }
 }
 ```
 
-Unknown hashes and missing package versions are recorded as `null`, not omitted.
+The file also retains compatibility sections (`installer`, `platform`, `state`,
+`components`, and `packages`) so older tooling can continue to inspect component
+status while newer tooling uses the required top-level audit fields.
 
-## State machine flow
+## Shell code examples
 
-```text
-VALIDATE
-  Validate platform and pins before mutation.
-DOWNLOAD
-  Acquire lock, create secure temp workspace, initialize backup root.
-VERIFY
-  Detect interrupted prior state and revalidate pins.
-INSTALL
-  Update apt metadata, install base packages, Node.js, Codex CLI, optional Docker.
-CONFIGURE
-  Write Codex config and shell integration with backups.
-VERIFY_RUNTIME
-  Validate runtime commands and write a running manifest snapshot.
-COMPLETE
-  Mark success and write the final complete manifest.
-FAILED
-  Mark failure and write the final failed manifest from the cleanup trap.
-```
-
-Resume and repair are intentionally replay based. A future `--repair` path should read `manifest.json`, compare desired and installed versions, then run the same small domain functions rather than executing hidden recovery logic.
-
-## Shell implementation examples
-
-Pin validation:
+Write phase state and a manifest snapshot:
 
 ```bash
-: "${ZCODEX_CODEX_CLI_VERSION:=0.129.0}"
-
-pins_validate_semver_or_major() {
-	local value="$1"
-	[[ "${value}" =~ ^[0-9]+([.][0-9]+){0,2}([+-][A-Za-z0-9._-]+)?$ ]]
-}
+state_mark INSTALL "install core runtime" running
+installer_install_all
+state_complete_phase INSTALL
+manifest_write running
 ```
 
-Phase tracking:
+Detect and resume an interrupted installation:
 
 ```bash
-state_mark INSTALL "install core runtime"
-packages_update
-packages_install_base
-nodejs_install_ubuntu
-codex_install_cli
+INSTALLER_PREVIOUS_PHASE="$(state_current_phase 2>/dev/null || true)"
+if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
+  log_warn "Interrupted install detected: $(state_recovery_summary)"
+fi
 ```
 
-Atomic manifest write:
+Repair from state without silently mutating packages:
 
 ```bash
-cat >"${ZCODEX_MANIFEST_FILE}.tmp" <<JSON
-{
-  "schema_version": 1,
-  "state": { "phase": "${phase}", "status": "${status}" }
-}
-JSON
-chmod 600 "${ZCODEX_MANIFEST_FILE}.tmp"
-mv "${ZCODEX_MANIFEST_FILE}.tmp" "${ZCODEX_MANIFEST_FILE}"
+case "$(state_current_phase 2>/dev/null || true)" in
+  CONFIGURE|VERIFY_RUNTIME|FAILED)
+    repair_codex_config
+    repair_shell_profile
+    manifest_write repair
+    ;;
+  INSTALL)
+    log_warn "Rerun the installer to complete package work."
+    manifest_write repair
+    ;;
+esac
 ```
 
-## Migration steps
+## Migration strategy
 
-1. Existing installs have no manifest and no state directory. The next installer run creates both automatically.
-2. Existing Codex config and shell profile backup behavior is unchanged.
-3. Existing users can set stricter apt pins before running the installer:
+1. Existing installs without state are treated as unmanaged-but-auditable.
+   `scripts/doctor.sh --repair --offline` initializes state at
+   `VERIFY_RUNTIME` and writes a manifest from the current runtime.
+2. Existing installs with an older manifest are overwritten atomically using a
+   `.tmp` file and `mv`, preserving compatibility sections for current readers.
+3. Interrupted installs keep their old `install_id`; completed installs reset
+   progress markers before a fresh upgrade so new pins are applied
+   deterministically.
+4. Operators can pin versions through the existing `ZCODEX_*_VERSION`
+   environment variables; those pins are recorded in component desired versions
+   and the `verification_hashes.manifest_inputs` digest.
 
-   ```bash
-   ZCODEX_NODEJS_PACKAGE_VERSION='22.16.0-1nodesource1' \
-   ZCODEX_DOCKER_PACKAGE_VERSION='24.0.7-0ubuntu4.1' \
-   bash scripts/install-codex-ubuntu.sh
-   ```
+## Failure recovery design
 
-4. CI can assert manifest validity with `python3 -m json.tool ~/.local/share/zcodex/manifest.json` or `jq` after a non-dry-run install.
+- Every phase transition is appended to `state/history.log` with UTC timestamp,
+  phase, status, install id, and a short message.
+- `current_phase` and `status` are single-purpose files for simple shell
+  inspection.
+- `completed.d/INSTALL` and `completed.d/CONFIGURE` allow the next installer run
+  to avoid redoing successfully completed mutable phases.
+- Validation, lock/workspace setup, and pin verification always rerun on resume
+  because they are cheap and protect the resumed run.
+- Failed runs are terminally marked as `FAILED` and also emit a manifest with
+  `install_state.status=failed` for auditing.
 
-## Risks and mitigations
+## Rollback logic
 
-| Risk | Mitigation |
-| --- | --- |
-| Ubuntu package versions differ by release or mirror | Exact apt package pins are opt-in and recorded in the manifest; defaults still validate runtime versions. |
-| Interrupted install leaves partial state | The next run logs the previous phase and replays deterministic phases. |
-| Manifest writer depends on unavailable `jq` | JSON is emitted by Bash with explicit escaping and validated in tests with Python. |
-| Command hashes can point at symlinks or wrappers | Hashes are best-effort verification metadata and are `null` when unavailable. Package versions remain authoritative for apt-managed tools. |
-| Pin drift causes unexpected upgrades | Codex CLI installs an exact npm version; Node.js fails if the observed version does not satisfy the pin. |
+Rollback stays deliberately narrow:
 
-## Security considerations
-
-- State and manifest directories are created with mode `700`; files are written with mode `600`.
-- Download security remains centralized in `security.sh` and still refuses non-HTTPS downloads.
-- The manifest stores versions and hashes only; it does not store tokens, environment dumps, npm config, or shell history.
-- Failure manifests are written from the cleanup trap to make incident review possible.
-- Package pins are validated before installation to avoid command injection through package spec construction.
-
-## Rollback and recovery logic
-
-Rollback remains file based for managed user files: config and shell profile changes are backed up before rewrite. Recovery is deterministic replay:
-
-1. Inspect `state/current_phase` and `state/history.log`.
-2. Inspect `manifest.json` if it exists.
-3. Restore backed-up config files when needed.
-4. Re-run the installer with the same pins.
-5. Confirm the final manifest reports `state.status=complete` and `state.phase=COMPLETE`.
-
-Future upgrade support should add a small comparator that reads desired pins, compares them with manifest component versions, and calls existing install functions. It should not introduce a second installation path.
-
-## Final recommendations
-
-- Keep pins explicit and reviewed in `pins.sh`.
-- Prefer exact pins for npm and optional exact apt package versions in production images.
-- Treat the manifest as an audit and repair input, not as a mutable source of truth.
-- Keep state transitions in `installer.sh` only so the install flow remains understandable.
-- Extend `components[]` for future runtime dependencies instead of changing the top-level schema for every new tool.
+- Before configuration changes, files are copied into a timestamped backup under
+  `~/.zcodex/backups/<timestamp>/`.
+- On installer failure, `backup_restore_all` restores files touched in the
+  current backup directory when `ZCODEX_ROLLBACK_ON_FAILURE=true` (default).
+- Package manager operations are not automatically rolled back; they are
+  idempotent and safer to repair or complete with a subsequent installer run
+  than to downgrade blindly.
+- Set `ZCODEX_ROLLBACK_ON_FAILURE=false` when debugging a failed configuration
+  step and you want to inspect the partially written files.

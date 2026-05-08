@@ -32,3 +32,16 @@ backup_file() {
 	cp -p "${source_file}" "${destination}"
 	log_success "Backed up ${source_file} to ${destination}."
 }
+
+backup_restore_all() {
+	local source_file
+	local restore_path
+
+	[[ -n "${ZCODEX_BACKUP_DIR}" && -d "${ZCODEX_BACKUP_DIR}" ]] || return 0
+	while IFS= read -r -d '' source_file; do
+		restore_path="/${source_file#"${ZCODEX_BACKUP_DIR}/"}"
+		install -d -m 700 "$(dirname "${restore_path}")"
+		cp -p "${source_file}" "${restore_path}"
+		log_warn "Rolled back ${restore_path} from ${source_file}."
+	done < <(find "${ZCODEX_BACKUP_DIR}" -type f -print0)
+}
