@@ -8,6 +8,7 @@ LIB_DIR="${SCRIPT_DIR}/lib"
 SCRIPT_NAME="$(basename "$0")"
 LOG_FILE="${LOG_FILE:-/tmp/zcodex-doctor.log}"
 CI_MODE="${CI_MODE:-${CI:-false}}"
+ZCODEX_DOCTOR_TRUSTED_PATH="${ZCODEX_DOCTOR_TRUSTED_PATH:-${ZCODEX_CI_TRUSTED_PATH:-/usr/sbin:/usr/bin:/sbin:/bin}}"
 STRICT_MODE="${STRICT:-0}"
 OFFLINE_MODE=false
 REPAIR_MODE=false
@@ -116,6 +117,13 @@ check_path() {
 
 	doctor_error 'PATH failed strict validation. Use absolute, existing, non-user-writable directories and remove empty segments.'
 	return 1
+}
+
+doctor_prepare_command_path() {
+	if [[ "${CI_MODE}" == "true" && "${ZCODEX_ALLOW_INSECURE_PATH:-false}" != "true" ]]; then
+		log_warn "CI mode detected; replacing PATH with trusted system directories before validation."
+		export PATH="${ZCODEX_DOCTOR_TRUSTED_PATH}"
+	fi
 }
 
 check_shell() {
@@ -355,6 +363,7 @@ main() {
 		esac
 	}
 	log_section 'zcodex doctor'
+	doctor_prepare_command_path
 	if [[ "${REPAIR_MODE}" == "true" ]]; then
 		run_repairs
 	fi
