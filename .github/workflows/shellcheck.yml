@@ -10,9 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install shell tooling
-        run: sudo apt-get update && sudo apt-get install -y shellcheck shfmt
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Run shellcheck
         run: find scripts tests -type f -name '*.sh' -print0 | xargs -0 shellcheck
-      - name: Check formatting
-        run: shfmt -d scripts tests

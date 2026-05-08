@@ -18,7 +18,7 @@ Existing user files are backed up before zcodex rewrites Codex config or appends
 
 ## Checksums
 
-`security_verify_sha256` validates downloaded files when callers provide an expected SHA-256 digest.
+`security_verify_sha256` validates downloaded files when callers provide an expected SHA-256 digest. `security_verify_manifest_entry` and `security_download_verified` support a `SHA256SUMS`-style manifest so CI and future artifact-download callers can require a named checksum entry before accepting downloaded content.
 
 ## Secrets
 

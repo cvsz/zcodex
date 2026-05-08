@@ -26,7 +26,8 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - `logging.sh` for structured CI-safe logs.
 - `retry.sh` for array-based exponential backoff.
 - `platform.sh` for Ubuntu and architecture validation.
-- `security.sh` for tempfiles, locks, HTTPS downloads, and checksums.
+- `runtime.sh` for consistent modular library loading.
+- `security.sh` for tempfiles, locks, HTTPS downloads, direct checksums, and checksum manifests.
 - `backup.sh` for rollback snapshots before Codex config or shell profile changes.
 - `packages.sh`, `nodejs.sh`, `docker.sh`, `codex.sh`, and `shell.sh` for install-specific domains.
 
@@ -34,7 +35,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 
 - No `curl | bash` or `curl | sh` execution patterns.
 - HTTPS-only download helper with strict curl flags.
-- Optional SHA-256 verification for downloaded artifacts.
+- Optional SHA-256 verification for downloaded artifacts, including `SHA256SUMS`-style manifest entries.
 - `mktemp -d` workspaces with trap-based cleanup.
 - Timestamped rollback backups under `${HOME}/.zcodex/backups/` before overwriting managed user files.
 - `flock` protection against concurrent installer runs.
@@ -94,7 +95,7 @@ bats tests
 
 ## CI
 
-CI runs shell syntax checks, shellcheck, shfmt, Bats tests, installer dry-run validation, Gitleaks, and Trivy filesystem scanning.
+CI runs shell syntax checks, shellcheck, a dedicated shfmt formatting workflow, Bats tests, installer dry-run validation, Gitleaks, and Trivy filesystem scanning.
 
 ## Troubleshooting
 
@@ -108,9 +109,10 @@ For airgapped or tightly proxied environments, skip outbound connectivity checks
 
 ```bash
 bash scripts/doctor.sh --offline
+bash scripts/doctor.sh --repair
 ```
 
-Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
+Doctor mode validates platform support, `PATH` safety, shell support, sudo/package-operation readiness, required tools (`bash`, `curl`, `git`, `node`, `npm`, `codex`), optional Docker availability, network access, and installed tool versions. Repair mode creates or permission-fixes the Codex config and reapplies idempotent shell integration without installing packages. If the installer cannot validate the host, confirm that you are running a supported Ubuntu release and architecture. If Docker group changes do not take effect immediately, log out and log back in. If `codex` is unavailable after installation, verify that npm global binaries are on your `PATH`.
 
 ## Rollback strategy
 

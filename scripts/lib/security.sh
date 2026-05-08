@@ -32,7 +32,37 @@ security_release_lock() {
 security_verify_sha256() {
 	local file="$1"
 	local expected_sha256="$2"
+
+	if [[ ! "${expected_sha256}" =~ ^[A-Fa-f0-9]{64}$ ]]; then
+		log_error "Invalid SHA-256 digest for ${file}."
+		return 1
+	fi
+
 	printf '%s  %s\n' "${expected_sha256}" "${file}" | sha256sum --check --status
+}
+
+security_manifest_digest() {
+	local manifest="$1"
+	local artifact_name="$2"
+	local digest
+
+	[[ -r "${manifest}" ]] || return 1
+	digest="$(awk -v artifact="${artifact_name}" 'NF == 2 && $2 == artifact { print $1; found = 1; exit } END { if (!found) exit 1 }' "${manifest}")" || return 1
+	printf '%s\n' "${digest}"
+}
+
+security_verify_manifest_entry() {
+	local manifest="$1"
+	local artifact="$2"
+	local artifact_name
+	local expected_sha256
+
+	artifact_name="$(basename "${artifact}")"
+	expected_sha256="$(security_manifest_digest "${manifest}" "${artifact_name}")" || {
+		log_error "No checksum entry for ${artifact_name} in ${manifest}."
+		return 1
+	}
+	security_verify_sha256 "${artifact}" "${expected_sha256}"
 }
 
 security_download() {
@@ -51,4 +81,13 @@ security_download() {
 	if [[ -n "${expected_sha256}" ]]; then
 		security_verify_sha256 "${output}" "${expected_sha256}"
 	fi
+}
+
+security_download_verified() {
+	local url="$1"
+	local output="$2"
+	local manifest="$3"
+
+	security_download "${url}" "${output}"
+	security_verify_manifest_entry "${manifest}" "${output}"
 }

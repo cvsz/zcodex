@@ -18,6 +18,12 @@ Doctor mode checks platform support, executable lookup path safety, supported in
 bash scripts/doctor.sh --offline
 ```
 
+Use repair mode to recreate a missing Codex config, restrict existing config permissions, and reapply idempotent shell profile integration without installing packages:
+
+```bash
+bash scripts/doctor.sh --repair
+```
+
 ## Common issues
 
 ### Unsupported OS

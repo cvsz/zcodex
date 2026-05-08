@@ -1,5 +1,9 @@
 # Runtime Libraries
 
+## `runtime.sh`
+
+Loads the full modular runtime stack for entry points that need installer, security, and repair helpers without duplicating source order.
+
 ## `logging.sh`
 
 Provides timestamped, CI-safe logging with stderr separation and optional terminal colors.
@@ -14,7 +18,7 @@ Validates Ubuntu releases and supported CPU architectures.
 
 ## `security.sh`
 
-Centralizes temporary directory creation, cleanup, lock handling, checksum verification, and HTTPS-only downloads.
+Centralizes temporary directory creation, cleanup, lock handling, SHA-256 checksum verification, checksum manifest lookup, and HTTPS-only downloads.
 
 ## `backup.sh`
 
