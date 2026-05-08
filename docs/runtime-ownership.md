@@ -56,11 +56,11 @@ The implementation lives in `scripts/lib/nodejs.sh` and is invoked from the inst
 
 - `nodejs_runtime_audit`: prints a deterministic key/value audit of command paths, versions, ownership, package manager state, and path shadows.
 - `nodejs_runtime_conflict_report`: converts the audit into `fatal` or `warn` records with explicit remediation text.
-- `nodejs_runtime_audit_phase`: logs audit results and fails early when dangerous conflicts exist.
+- `nodejs_runtime_audit_phase`: logs audit results, fails early when dangerous conflicts exist in strict install mode, and can report those conflicts non-fatally for dry-runs.
 - `nodejs_install_managed`: installs Node.js/npm only in `clean-system` mode and only when the active runtime is not user-managed.
 - `nodejs_install_global_packages`: refuses nvm/asdf global writes unless `ZCODEX_ALLOW_USER_RUNTIME_MUTATION=true` is set.
 
-The installer exposes `--runtime-mode clean-system|existing-runtime|ci|developer`; `--ci` remains supported and selects `ci` mode. Dry-runs execute the same input validation and runtime audit, but stop before locks, backups, apt writes, npm writes, Docker changes, and shell configuration.
+The installer exposes `--runtime-mode clean-system|existing-runtime|ci|developer`; `--ci` remains supported and selects `ci` mode. Dry-runs execute the same input validation and runtime audit, but report install-blocking runtime conflicts as warnings because no Node.js/npm mutation will occur. Non-dry-run installs still fail on those conflicts before locks, backups, apt writes, npm writes, Docker changes, or shell configuration can proceed.
 
 ## Migration strategy
 
@@ -73,7 +73,7 @@ The installer exposes `--runtime-mode clean-system|existing-runtime|ci|developer
 
 ## UX improvements
 
-The installer now prints the runtime policy in the dry-run plan and logs a concise audit summary before install. Fatal conflicts include a direct remediation sentence, while tolerable `PATH` shadows are warnings with the observed binary order. This makes failures actionable without requiring operators to infer ownership from raw package-manager output.
+The installer now prints the runtime policy in the dry-run plan and logs a concise audit summary before install. Non-dry-run fatal conflicts include a direct remediation sentence and stop the install; dry-runs downgrade those blockers to remediation warnings so CI smoke checks can validate the plan without mutating a polluted runner. Tolerable `PATH` shadows are warnings with the observed binary order. This makes failures actionable without requiring operators to infer ownership from raw package-manager output.
 
 ## Security considerations
 

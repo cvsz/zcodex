@@ -376,6 +376,59 @@ system-apt-nodesource'* ]]
 	[[ "$output" == *"warn|npm package ownership could not be verified"* ]]
 }
 
+@test "dry-run runtime audit reports install blockers without failing" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_audit() { cat <<AUDIT
+mode=clean-system
+node_path=/usr/local/bin/node
+node_version=20.1.0
+node_owner=system-unowned
+node_package=unknown
+node_path_count=1
+npm_path=/usr/local/bin/npm
+npm_version=10.0.0
+npm_owner=unknown
+npm_package=unknown
+npm_path_count=1
+nvm_detected=true
+asdf_detected=false
+apt_nodejs=false
+nodesource_nodejs=false
+distro_npm=false
+node_paths=/usr/local/bin/node
+npm_paths=/usr/local/bin/npm
+AUDIT
+}; nodejs_runtime_audit_phase false' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Runtime dry-run conflict"* ]]
+	[[ "$output" == *"Runtime dry run reported"* ]]
+}
+
+@test "strict runtime audit still fails install blockers" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_audit() { cat <<AUDIT
+mode=clean-system
+node_path=/usr/local/bin/node
+node_version=20.1.0
+node_owner=system-unowned
+node_package=unknown
+node_path_count=1
+npm_path=/usr/local/bin/npm
+npm_version=10.0.0
+npm_owner=unknown
+npm_package=unknown
+npm_path_count=1
+nvm_detected=true
+asdf_detected=false
+apt_nodejs=false
+nodesource_nodejs=false
+distro_npm=false
+node_paths=/usr/local/bin/node
+npm_paths=/usr/local/bin/npm
+AUDIT
+}; nodejs_runtime_audit_phase true' "${REPO_ROOT}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Runtime audit failed"* ]]
+}
+
 @test "runtime conflict report enforces ci node pin" {
 	local audit
 	audit=$'mode=ci\nnode_path=/usr/bin/node\nnode_version=20.1.0\nnode_owner=system-apt-distro\nnode_package=nodejs\nnode_path_count=1\nnpm_path=/usr/bin/npm\nnpm_version=10.0.0\nnpm_owner=system-apt-distro\nnpm_package=npm\nnpm_path_count=1\nnvm_detected=false\nasdf_detected=false\napt_nodejs=true\nnodesource_nodejs=false\ndistro_npm=true\nnode_paths=/usr/bin/node\nnpm_paths=/usr/bin/npm'
