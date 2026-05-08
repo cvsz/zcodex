@@ -219,7 +219,16 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 }
 
 @test "release orchestrator CI dry-run treats missing host tools as advisory" {
-	run env -u NVM_DIR CI=true HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release-ci.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	local tmpbin
+	tmpbin="$(zcodex_tmpdir)"
+	local command_name command_path
+	for command_name in bash basename cat date dirname env mkdir tee; do
+		command_path="$(type -P "${command_name}")"
+		ln -s "${command_path}" "${tmpbin}/${command_name}"
+	done
+
+	run env -u NVM_DIR CI=true HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="${tmpbin}" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release-ci.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	rm -rf "${tmpbin}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Warning: Docker not found"* ]]
 	[[ "$output" == *"Dry run completed without making changes"* ]]
