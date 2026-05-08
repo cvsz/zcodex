@@ -25,6 +25,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 
 - `logging.sh` for structured CI-safe logs.
 - `retry.sh` for array-based exponential backoff.
+- `pins.sh`, `state.sh`, and `manifest.sh` for deterministic version pins, explicit install phases, and machine-readable install records.
 - `platform.sh` for Ubuntu and architecture validation.
 - `runtime.sh` for consistent modular library loading.
 - `installer.sh` for CLI flag parsing, install-phase sequencing, and trap cleanup.
@@ -40,6 +41,7 @@ The main installer is an orchestration layer. Reusable behavior lives in `script
 - `mktemp -d` workspaces with trap-based cleanup.
 - Timestamped rollback backups under `${HOME}/.zcodex/backups/` before overwriting managed user files.
 - `flock` protection against concurrent installer runs.
+- Manifest and phase state files under `${HOME}/.local/share/zcodex/` with private directory and file permissions.
 - Minimal Codex config generation without storing secrets.
 
 ## Installation flow
@@ -66,14 +68,15 @@ For release-style operations, use the unified orchestrator:
 
 The orchestrator writes a combined operational log to `codex_release.log` by default, or to `ZCODEX_RELEASE_LOG` when that environment variable is set.
 
-The installer performs these steps:
+The installer performs these explicit state-machine phases:
 
-1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
-2. Acquire an installation lock, secure temporary workspace, and rollback backup directory.
-3. Update APT metadata and install base packages.
-4. Install Node.js/npm and the Codex CLI.
-5. Optionally install Docker and configure group membership.
-6. Write a minimal Codex config and shell integration.
+1. `VALIDATE`: validate Ubuntu release, CPU architecture, WSL status, container runtime context, and version pins.
+2. `DOWNLOAD`: acquire an installation lock, secure temporary workspace, and rollback backup directory.
+3. `VERIFY`: detect interrupted prior state and revalidate pins.
+4. `INSTALL`: update APT metadata, install base packages, pinned Node.js, pinned Codex CLI, and optional Docker.
+5. `CONFIGURE`: write a minimal Codex config and shell integration.
+6. `VERIFY_RUNTIME`: validate runtime commands and write a running manifest snapshot.
+7. `COMPLETE` or `FAILED`: write final state and `${HOME}/.local/share/zcodex/manifest.json`.
 
 ## Codex config
 
@@ -129,4 +132,4 @@ Doctor mode validates platform support, `PATH` safety, shell support, sudo/packa
 
 Before rewriting an existing Codex config or appending to an existing shell profile, the installer copies the original file into `${HOME}/.zcodex/backups/<timestamp>/` while preserving the source path under that backup root. Restore a file by copying the saved version back to its original location, then rerun `bash scripts/doctor.sh` to validate the runtime.
 
-More details are available in `docs/troubleshooting.md`.
+Manifest and state design details are available in `docs/manifest-state.md`. More troubleshooting details are available in `docs/troubleshooting.md`.

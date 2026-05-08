@@ -8,6 +8,8 @@
 : "${DRY_RUN:=false}"
 : "${LOCK_FILE:=/tmp/zcodex-install.lock}"
 : "${LOG_FILE:=/tmp/zcodex-install.log}"
+: "${INSTALLER_PREVIOUS_PHASE:=}"
+: "${INSTALLER_STATE_STARTED:=false}"
 
 installer_usage() {
 	cat <<USAGE
@@ -46,17 +48,28 @@ installer_parse_args() {
 installer_planned_steps() {
 	cat <<PLAN
 Install flow:
-  1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
-  2. Acquire a process lock, secure temporary workspace, and backup directory.
-  3. Update APT metadata and install base packages.
-  4. Install Node.js/npm and the Codex CLI.
-  5. Optionally install Docker.
-  6. Write a minimal Codex config and shell integration.
+  1. VALIDATE platform, version pins, CPU architecture, WSL status, and container context.
+  2. DOWNLOAD package metadata and acquire a process lock, secure workspace, and backup directory.
+  3. VERIFY package pins and existing runtime state where possible.
+  4. INSTALL base packages, pinned Node.js, pinned Codex CLI, and optional Docker.
+  5. CONFIGURE Codex config and shell integration.
+  6. VERIFY_RUNTIME and write ${ZCODEX_MANIFEST_FILE}.
+  7. COMPLETE with explicit state in ${ZCODEX_STATE_DIR}.
 PLAN
+	pins_summary
 }
 
 installer_cleanup() {
 	local exit_code=$?
+	if [[ "${DRY_RUN}" != "true" && "${INSTALLER_STATE_STARTED}" == "true" ]]; then
+		if ((exit_code == 0)); then
+			state_mark COMPLETE "installer completed" || true
+			manifest_write complete || true
+		else
+			state_mark FAILED "exit_code=${exit_code}" || true
+			manifest_write failed || true
+		fi
+	fi
 	security_release_lock
 	security_cleanup_tmpdir
 	if ((exit_code == 0)); then
@@ -68,12 +81,22 @@ installer_cleanup() {
 }
 
 installer_prepare_runtime() {
+	state_mark DOWNLOAD "prepare runtime workspace"
 	security_acquire_lock "${LOCK_FILE}"
 	security_create_tmpdir >/dev/null
 	backup_init >/dev/null
 }
 
+installer_verify_inputs() {
+	if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
+		log_warn "Previous install state was incomplete at phase ${INSTALLER_PREVIOUS_PHASE}. Continuing deterministically."
+	fi
+	state_mark VERIFY "validate pins and interrupted state"
+	pins_validate
+}
+
 installer_install_core() {
+	state_mark INSTALL "install core runtime"
 	packages_update
 	packages_install_base
 	nodejs_install_ubuntu
@@ -100,9 +123,15 @@ installer_install_docker() {
 }
 
 installer_configure_codex() {
+	state_mark CONFIGURE "configure codex runtime"
 	codex_write_config
 	shell_configure_codex
+}
+
+installer_verify_runtime() {
+	state_mark VERIFY_RUNTIME "validate installed tools"
 	codex_validate_cli || log_warn "Codex CLI validation did not pass in this environment."
+	manifest_write running
 }
 
 installer_run() {
@@ -119,6 +148,7 @@ installer_run() {
 	log_section "zcodex installer"
 
 	platform_validate
+	pins_validate
 	installer_planned_steps
 
 	if [[ "${DRY_RUN}" == "true" ]]; then
@@ -126,9 +156,14 @@ installer_run() {
 		return 0
 	fi
 
+	INSTALLER_PREVIOUS_PHASE="$(state_current_phase 2>/dev/null || true)"
+	INSTALLER_STATE_STARTED=true
+	state_mark VALIDATE "validate platform"
 	installer_prepare_runtime
+	installer_verify_inputs
 	installer_install_core
 	installer_install_optional_packages
 	installer_install_docker
 	installer_configure_codex
+	installer_verify_runtime
 }
