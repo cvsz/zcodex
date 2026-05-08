@@ -11,7 +11,10 @@ ZCODEX_REQUIRED_TOOLING=(
 	shfmt
 	bats
 	tar
+	gzip
 	sha256sum
+	make
+	python3
 )
 
 _dependency_log() {
@@ -65,6 +68,7 @@ dependency_install_hint() {
 	sha256sum) printf '%s\n' 'Install sha256sum: sudo apt install coreutils' ;;
 	make) printf '%s\n' 'Install make: sudo apt install make' ;;
 	gzip) printf '%s\n' 'Install gzip: sudo apt install gzip' ;;
+	python3) printf '%s\n' 'Install Python 3: sudo apt install python3' ;;
 	*) printf 'Install %s with your system package manager.\n' "${command_name}" ;;
 	esac
 }
@@ -83,6 +87,7 @@ dependency_command_description() {
 	sha256sum) printf '%s\n' 'SHA-256 checksum tool' ;;
 	make) printf '%s\n' 'make build orchestrator' ;;
 	gzip) printf '%s\n' 'gzip compressor' ;;
+	python3) printf '%s\n' 'Python 3 interpreter' ;;
 	*) printf '%s\n' "${command_name}" ;;
 	esac
 }
@@ -120,7 +125,7 @@ validate_required_tooling() {
 	if ((DEPENDENCY_FAILURES > 0)); then
 		_dependency_log ERROR "Environment validation failed with ${DEPENDENCY_FAILURES} missing required dependency/dependencies."
 		_dependency_log INFO 'Ubuntu quick fix: make deps-dev'
-		_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip'
+		_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip python3'
 		return 1
 	fi
 
@@ -128,13 +133,13 @@ validate_required_tooling() {
 }
 
 install_dev_dependencies_ubuntu() {
-	local apt_packages=(bash git curl shellcheck shfmt bats tar coreutils make gzip)
+	local apt_packages=(bash git curl shellcheck shfmt bats tar coreutils make gzip python3)
 	local sudo_cmd=()
 
 	if [[ "${EUID}" -ne 0 ]]; then
 		if ! command -v sudo >/dev/null 2>&1; then
 			_dependency_log ERROR 'sudo is required to install development dependencies when not running as root.'
-			_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip'
+			_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip python3'
 			return 1
 		fi
 		sudo_cmd=(sudo)
@@ -142,7 +147,7 @@ install_dev_dependencies_ubuntu() {
 
 	if ! command -v apt-get >/dev/null 2>&1; then
 		_dependency_log ERROR 'Automatic dependency installation currently requires apt-get on Ubuntu/Debian systems.'
-		_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip'
+		_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip python3'
 		return 1
 	fi
 

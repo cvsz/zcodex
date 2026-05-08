@@ -157,7 +157,7 @@ check_release_tooling() {
 	local missing=0
 
 	doctor_info 'Checking development/release tooling. Missing tools are WARN by default; run make validate-env for a hard gate.'
-	for command_name in shellcheck shfmt bats tar sha256sum; do
+	for command_name in "${ZCODEX_REQUIRED_TOOLING[@]}"; do
 		if runtime_command_exists "${command_name}"; then
 			doctor_ok "$(dependency_command_description "${command_name}") found: $(command -v "${command_name}")"
 			continue

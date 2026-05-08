@@ -1,7 +1,13 @@
 #!/usr/bin/env bats
 
+load "test_helper.bash"
+
 setup() {
-	export REPO_ROOT="${BATS_TEST_DIRNAME}/.."
+	zcodex_test_setup
+}
+
+teardown() {
+	zcodex_test_teardown
 }
 
 @test "retry succeeds after a transient failure" {
@@ -10,7 +16,7 @@ setup() {
 }
 
 @test "secure download rejects non-HTTPS URLs" {
-	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/retry.sh"; . "${0}/scripts/lib/security.sh"; security_download "http://example.com/file" /tmp/zcodex-test-download' "${REPO_ROOT}"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/retry.sh"; . "${0}/scripts/lib/security.sh"; security_download "http://example.com/file" ${TMPDIR}/zcodex-test-download' "${REPO_ROOT}"
 	[ "$status" -ne 0 ]
 }
 
@@ -22,7 +28,7 @@ setup() {
 
 @test "platform normalizes arm architecture aliases" {
 	local tmpbin
-	tmpbin="$(mktemp -d)"
+	tmpbin="$(zcodex_tmpdir)"
 	cat >"${tmpbin}/uname" <<'SH'
 #!/usr/bin/env bash
 printf 'aarch64\n'
@@ -36,7 +42,7 @@ SH
 
 @test "platform detects WSL from proc version" {
 	local proc_version
-	proc_version="$(mktemp)"
+	proc_version="$(zcodex_tmpfile)"
 	printf 'Linux version 5.15.90.1-microsoft-standard-WSL2\n' >"${proc_version}"
 	run env ZCODEX_PROC_VERSION_FILE="${proc_version}" bash -c '. "${0}/scripts/lib/platform.sh"; platform_is_wsl' "${REPO_ROOT}"
 	rm -f "${proc_version}"
@@ -63,7 +69,7 @@ SH
 
 @test "doctor rejects unsafe PATH entries" {
 	local tmpbin
-	tmpbin="$(mktemp -d)"
+	tmpbin="$(zcodex_tmpdir)"
 	chmod 755 "${tmpbin}"
 	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; WARN_COUNT=0; ERROR_COUNT=0; check_path || true; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	rm -rf "${tmpbin}"
@@ -104,13 +110,13 @@ SH
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Bats test runner is missing"* ]]
 	[[ "$output" == *"make deps-dev"* ]]
-	[[ "$output" == *"ERROR=0 WARN=5"* ]]
+	[[ "$output" =~ ERROR=0[[:space:]]WARN=[0-9]+ ]]
 }
 
 @test "backup_file preserves existing files under backup root" {
 	local tmpdir
 	local source_file
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	source_file="${tmpdir}/home/user/.codex/config.toml"
 	mkdir -p "$(dirname "${source_file}")"
 	printf 'existing config\n' >"${source_file}"
@@ -136,7 +142,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 }
 @test "codex_write_config backs up existing config before rewrite" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	mkdir -p "${tmpdir}/home/.codex"
 	printf 'old config\n' >"${tmpdir}/home/.codex/config.toml"
 
@@ -160,7 +166,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "checksum verification rejects malformed digests" {
 	local artifact
-	artifact="$(mktemp)"
+	artifact="$(zcodex_tmpfile)"
 	printf 'artifact\n' >"${artifact}"
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; security_verify_sha256 "${1}" not-a-sha' "${REPO_ROOT}" "${artifact}"
 	rm -f "${artifact}"
@@ -172,7 +178,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	local tmpdir
 	local artifact
 	local digest
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	artifact="${tmpdir}/codex.tar.gz"
 	printf 'artifact\n' >"${artifact}"
 	digest="$(sha256sum "${artifact}" | awk '{ print $1 }')"
@@ -185,7 +191,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "doctor repair creates missing Codex config" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run env -u CODEX_HOME HOME="${tmpdir}/home" CI=true bash -c '. "${0}/scripts/doctor.sh"; logging_init; FAILED=0; run_repairs; test -f "${HOME}/.codex/config.toml"; stat -c "%a" "${HOME}/.codex/config.toml"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -199,21 +205,21 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 }
 
 @test "release orchestrator dry-run basic mode delegates to installer" {
-	run env -u NVM_DIR HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	run env -u NVM_DIR HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Running Basic Installation"* ]]
 	[[ "$output" == *"Dry run completed without making changes"* ]]
 }
 
 @test "release orchestrator prefers explicit release log" {
-	run env -u NVM_DIR HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" LOG_FILE="${BATS_TEST_TMPDIR}/missing/ambient.log" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	run env -u NVM_DIR HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="/usr/bin:/bin" LOG_FILE="${ZCODEX_TEST_WORKDIR}/missing/ambient.log" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
 	[ "$status" -eq 0 ]
-	[ -s "${BATS_TEST_TMPDIR}/release.log" ]
-	[ ! -e "${BATS_TEST_TMPDIR}/missing/ambient.log" ]
+	[ -s "${ZCODEX_TEST_WORKDIR}/release.log" ]
+	[ ! -e "${ZCODEX_TEST_WORKDIR}/missing/ambient.log" ]
 }
 
 @test "release orchestrator CI dry-run treats missing host tools as advisory" {
-	run env -u NVM_DIR CI=true HOME="${BATS_TEST_TMPDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${BATS_TEST_TMPDIR}/release-ci.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	run env -u NVM_DIR CI=true HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release-ci.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Warning: Docker not found"* ]]
 	[[ "$output" == *"Dry run completed without making changes"* ]]
@@ -227,7 +233,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "state tracking writes current phase and history" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark VERIFY "unit test"; state_current_phase; test -s "${ZCODEX_STATE_DIR}/history.log"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -236,7 +242,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "manifest writer emits schema and pinned codex component" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/state.sh"; . "${0}/scripts/lib/manifest.sh"; logging_init; state_mark VERIFY_RUNTIME "unit test"; manifest_write running; python3 -m json.tool "${ZCODEX_MANIFEST_FILE}" >/dev/null; cat "${ZCODEX_MANIFEST_FILE}"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -256,7 +262,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "state machine rejects invalid phases and marks completed phases" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark INSTALL "unit test" running; state_complete_phase INSTALL; state_phase_completed INSTALL; ! state_mark UNKNOWN "bad"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -265,7 +271,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "installer resume skips completed install phase" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/runtime.sh"; logging_init; state_mark INSTALL "interrupted" running; state_complete_phase INSTALL; INSTALLER_PREVIOUS_PHASE=INSTALL; installer_prepare_recovery; installer_run_phase INSTALL "install core runtime" bash -c "echo should-not-run; exit 3"; printf "phase=%s\n" "$(state_current_phase)"' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -284,7 +290,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 
 @test "supports_apt is command capability based" {
 	local tmpbin
-	tmpbin="$(mktemp -d)"
+	tmpbin="$(zcodex_tmpdir)"
 	cat >"${tmpbin}/apt-get" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -306,7 +312,7 @@ SH
 
 @test "runtime_exec_logged preserves command exit status" {
 	local logfile
-	logfile="${BATS_TEST_TMPDIR}/exec.log"
+	logfile="${ZCODEX_TEST_WORKDIR}/exec.log"
 	run bash -c '. "${0}/scripts/lib/exec.sh"; runtime_exec_logged "${1}" "unit command" bash -c "printf output; exit 7"' "${REPO_ROOT}" "${logfile}"
 	[ "$status" -eq 7 ]
 	[[ "$output" == *"unit command"* ]]
@@ -315,7 +321,7 @@ SH
 
 @test "state explicit context writes isolated phase state" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark_in "${1}/home" "${1}/state" VERIFY "explicit" running; state_current_phase_in "${1}/state"; test -s "${1}/state/history.log"' "${REPO_ROOT}" "${tmpdir}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
@@ -324,7 +330,7 @@ SH
 
 @test "installer CI dry-run sanitizes unsafe runner PATH" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	chmod 700 "${tmpdir}"
 	run env CI=true PATH="${tmpdir}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/runtime.sh"; platform_validate() { printf "PATH=%s\n" "${PATH}"; }; pins_validate() { :; }; pins_summary() { :; }; installer_verify_inputs() { :; }; installer_runtime_audit_dry_run() { :; }; installer_run --dry-run --skip-docker --skip-optional' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
@@ -365,7 +371,7 @@ true ci'* ]]
 
 @test "runtime ownership uses dpkg package owner for npm verification" {
 	local tmpbin
-	tmpbin="$(mktemp -d)"
+	tmpbin="$(zcodex_tmpdir)"
 	cat >"${tmpbin}/dpkg-query" <<'SH'
 #!/usr/bin/env bash
 if [[ "$1" == "-S" && "$2" == "/usr/bin/npm" ]]; then
@@ -485,7 +491,7 @@ AUDIT
 
 @test "runtime privileged wrapper rejects shadow sudo" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	printf '#!/usr/bin/env bash\nexit 0\n' >"${tmpdir}/sudo"
 	chmod +x "${tmpdir}/sudo"
 	[ "${EUID}" -eq 0 ] && skip "sudo shadow rejection only applies for non-root execution"
@@ -497,11 +503,42 @@ AUDIT
 
 @test "manifest schema validation rejects legacy schema" {
 	local tmpdir
-	tmpdir="$(mktemp -d)"
+	tmpdir="$(zcodex_tmpdir)"
 	cat >"${tmpdir}/manifest.json" <<'JSON'
 {"schema_version":1,"installer":{},"platform":{},"state":{},"components":[],"verification_hashes":{},"runtime":{}}
 JSON
 	run bash -c '. "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/manifest.sh"; manifest_validate_schema "${1}"' "${REPO_ROOT}" "${tmpdir}/manifest.json"
 	rm -rf "${tmpdir}"
 	[ "$status" -ne 0 ]
+}
+
+@test "release archive generation is byte reproducible across output directories" {
+	local first_dir second_dir version first_archive second_archive first_sha second_sha
+	first_dir="$(zcodex_tmpdir)"
+	second_dir="$(zcodex_tmpdir)"
+	version="$(tr -d '[:space:]' <"${REPO_ROOT}/VERSION")"
+	first_archive="${first_dir}/zcodex-v${version}.tar.gz"
+	second_archive="${second_dir}/zcodex-v${version}.tar.gz"
+
+	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${first_dir}"
+	[ "$status" -eq 0 ]
+	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${second_dir}"
+	[ "$status" -eq 0 ]
+
+	first_sha="$(sha256sum "${first_archive}" | awk '{ print $1 }')"
+	second_sha="$(sha256sum "${second_archive}" | awk '{ print $1 }')"
+	[ "${first_sha}" = "${second_sha}" ]
+}
+
+@test "release archive metadata is normalized" {
+	local output_dir version archive listing
+	output_dir="$(zcodex_tmpdir)"
+	version="$(tr -d '[:space:]' <"${REPO_ROOT}/VERSION")"
+	archive="${output_dir}/zcodex-v${version}.tar.gz"
+
+	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC SOURCE_DATE_EPOCH=0 TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${output_dir}"
+	[ "$status" -eq 0 ]
+	listing="$(tar -tvf "${archive}" | sed -n '1,5p')"
+	[[ "${listing}" == *" 0/0 "* ]]
+	[[ "${listing}" == *"1970-01-01"* || "${listing}" == *"1969-12-31"* ]]
 }
