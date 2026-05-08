@@ -281,6 +281,7 @@ nodejs_runtime_conflict_report() {
 }
 
 nodejs_runtime_audit_phase() {
+	local strict="${1:-true}"
 	local audit severity description remediation fatal_count=0 warning_count=0
 	audit="$(nodejs_runtime_audit)"
 	nodejs_log_runtime_audit "${audit}"
@@ -289,7 +290,11 @@ nodejs_runtime_audit_phase() {
 		case "${severity}" in
 		fatal)
 			fatal_count=$((fatal_count + 1))
-			log_error "Runtime conflict: ${description}. Remediation: ${remediation}"
+			if [[ "${strict}" == "true" ]]; then
+				log_error "Runtime conflict: ${description}. Remediation: ${remediation}"
+			else
+				log_warn "Runtime dry-run conflict: ${description}. Remediation before install: ${remediation}"
+			fi
 			;;
 		warn)
 			warning_count=$((warning_count + 1))
@@ -299,8 +304,13 @@ nodejs_runtime_audit_phase() {
 	done < <(nodejs_runtime_conflict_report "${audit}")
 
 	if ((fatal_count > 0)); then
-		log_error "Runtime audit failed with ${fatal_count} dangerous conflict(s); refusing to mutate Node.js/npm."
-		return 1
+		if [[ "${strict}" == "true" ]]; then
+			log_error "Runtime audit failed with ${fatal_count} dangerous conflict(s); refusing to mutate Node.js/npm."
+			return 1
+		fi
+		log_warn "Runtime dry run reported ${fatal_count} install-blocking conflict(s); no Node.js/npm changes will be made."
+		log_success "Runtime dry-run audit completed with ${fatal_count} conflict(s) and ${warning_count} warning(s)."
+		return 0
 	fi
 	log_success "Runtime audit passed with ${warning_count} warning(s)."
 }

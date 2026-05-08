@@ -164,7 +164,11 @@ installer_verify_inputs() {
 }
 
 installer_runtime_audit() {
-	nodejs_runtime_audit_phase
+	nodejs_runtime_audit_phase true
+}
+
+installer_runtime_audit_dry_run() {
+	nodejs_runtime_audit_phase false
 }
 
 installer_install_core() {
@@ -227,7 +231,7 @@ installer_run() {
 
 	if [[ "${DRY_RUN}" == "true" ]]; then
 		installer_verify_inputs
-		installer_runtime_audit
+		installer_runtime_audit_dry_run
 		log_success "Dry run completed without making changes."
 		return 0
 	fi
