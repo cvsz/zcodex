@@ -20,17 +20,14 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Install release validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bash git curl shellcheck shfmt tar coreutils make gzip
-
-      - name: Setup Bats
-        uses: bats-core/bats-action@3.0.1
+          sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip
 
       - name: Validate tag and VERSION
         if: github.event_name == 'push'
@@ -53,7 +50,7 @@ jobs:
 
       - name: Publish GitHub Release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: zcodex ${{ github.ref_name }} — Secure Ubuntu Bootstrap Runtime
           body_path: dist/RELEASE_NOTES.md
