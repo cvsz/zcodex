@@ -217,3 +217,34 @@ SH
 	[[ "$output" == *"Skipping INSTALL"* ]]
 	[[ "$output" != *"should-not-run"* ]]
 }
+
+@test "runtime capability registry reports apt support" {
+	run bash -c '. "${0}/scripts/lib/platform.sh"; runtime_capability_registry' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"supports_apt="* ]]
+	[[ "$output" == *"supports_systemd="* ]]
+	[[ "$output" == *"supports_docker="* ]]
+	[[ "$output" == *"supports_rootless="* ]]
+}
+
+@test "supports_apt is command capability based" {
+	local tmpbin
+	tmpbin="$(mktemp -d)"
+	cat >"${tmpbin}/apt-get" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+	cat >"${tmpbin}/dpkg-query" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+	chmod +x "${tmpbin}/apt-get" "${tmpbin}/dpkg-query"
+	run env PATH="${tmpbin}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/platform.sh"; supports_apt' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+}
+
+@test "supports_systemd can be enabled for tests without a running init" {
+	run env ZCODEX_ASSUME_SYSTEMD=true bash -c '. "${0}/scripts/lib/platform.sh"; supports_systemd' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+}

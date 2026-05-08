@@ -14,7 +14,7 @@ nodejs_version_matches_pin() {
 	esac
 }
 
-nodejs_install_ubuntu() {
+nodejs_install_managed() {
 	local installed_version
 	installed_version="$(nodejs_installed_version 2>/dev/null || true)"
 	if [[ -n "${installed_version}" ]] && nodejs_version_matches_pin "${installed_version}"; then
@@ -22,7 +22,12 @@ nodejs_install_ubuntu() {
 		return 0
 	fi
 
-	log_info "Installing Node.js pin ${ZCODEX_NODEJS_VERSION} from Ubuntu repositories."
+	if ! supports_apt; then
+		log_error "Node.js installation requires the APT capability."
+		return 1
+	fi
+
+	log_info "Installing Node.js pin ${ZCODEX_NODEJS_VERSION} through the managed APT package path."
 	if [[ -n "${ZCODEX_NODEJS_PACKAGE_VERSION}" ]]; then
 		packages_install "nodejs=${ZCODEX_NODEJS_PACKAGE_VERSION}" npm
 	else
@@ -42,4 +47,8 @@ nodejs_install_global_packages() {
 		return 0
 	fi
 	retry 3 2 sudo npm install --global "${packages[@]}"
+}
+
+nodejs_install_ubuntu() {
+	nodejs_install_managed "$@"
 }
