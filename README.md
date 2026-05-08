@@ -56,6 +56,16 @@ bash scripts/install-codex-ubuntu.sh --skip-optional
 bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
 ```
 
+For release-style operations, use the unified orchestrator:
+
+```bash
+./codex.sh basic --dry-run --skip-docker
+./codex.sh orchestrator --offline --repair
+./codex.sh release --skip-optional
+```
+
+The orchestrator writes a combined operational log to `codex_release.log` by default, or to `ZCODEX_RELEASE_LOG` when that environment variable is set.
+
 The installer performs these steps:
 
 1. Validate Ubuntu release, CPU architecture, WSL status, and container runtime context.
@@ -88,9 +98,9 @@ make doctor
 Equivalent direct commands:
 
 ```bash
-bash -n scripts/*.sh scripts/lib/*.sh tests/*.sh
-find scripts tests -type f -name '*.sh' -print0 | xargs -0 shellcheck
-shfmt -d scripts tests
+bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh
+{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0; } | xargs -0 shellcheck
+shfmt -d codex.sh scripts tests
 bats tests
 ```
 
