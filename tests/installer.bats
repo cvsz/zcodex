@@ -121,6 +121,11 @@ SH
 	[[ "$output" == *"existing config"* ]]
 }
 
+@test "example zcodex config is valid TOML" {
+	run python3 -c 'import pathlib, sys, tomllib; data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text()); assert data["installer"]["version"] == "0.2.0"; assert data["runtime"]["nodejs"]["version"] == "22"; assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")' "${REPO_ROOT}/config/zcodex/config.toml"
+	[ "$status" -eq 0 ]
+}
+
 @test "codex_write_config backs up existing config before rewrite" {
 	local tmpdir
 	tmpdir="$(mktemp -d)"
