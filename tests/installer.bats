@@ -279,3 +279,33 @@ SH
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"VERIFY"* ]]
 }
+
+@test "installer parser accepts runtime modes and ci selects ci mode" {
+	run bash -c '. "${0}/scripts/lib/runtime.sh"; installer_parse_args --runtime-mode existing-runtime; printf "%s\n" "${ZCODEX_RUNTIME_MODE}"; installer_parse_args --ci; printf "%s %s\n" "${CI_MODE}" "${ZCODEX_RUNTIME_MODE}"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'existing-runtime
+true ci'* ]]
+}
+
+@test "runtime conflict report fails NodeSource nodejs with distro npm" {
+	local audit
+	audit=$'mode=clean-system\nnode_path=/usr/bin/node\nnode_version=22.1.0\nnode_owner=system-apt-nodesource\nnode_path_count=1\nnpm_path=/usr/bin/npm\nnpm_version=10.0.0\nnpm_owner=system-apt-nodesource\nnpm_path_count=1\nnvm_detected=false\nasdf_detected=false\napt_nodejs=true\nnodesource_nodejs=true\ndistro_npm=true\nnode_paths=/usr/bin/node\nnpm_paths=/usr/bin/npm'
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_conflict_report "${1}"' "${REPO_ROOT}" "${audit}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"fatal|NodeSource nodejs is installed with distro npm"* ]]
+}
+
+@test "runtime conflict report warns on PATH shadows" {
+	local audit
+	audit=$'mode=clean-system\nnode_path=/usr/local/bin/node\nnode_version=22.1.0\nnode_owner=system-unowned\nnode_path_count=2\nnpm_path=/usr/local/bin/npm\nnpm_version=10.0.0\nnpm_owner=system-unowned\nnpm_path_count=2\nnvm_detected=false\nasdf_detected=false\napt_nodejs=false\nnodesource_nodejs=false\ndistro_npm=false\nnode_paths=/usr/local/bin/node,/usr/bin/node\nnpm_paths=/usr/local/bin/npm,/usr/bin/npm'
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_conflict_report "${1}"' "${REPO_ROOT}" "${audit}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"warn|multiple node binaries"* ]]
+	[[ "$output" == *"warn|multiple npm binaries"* ]]
+}
+
+@test "global npm install refuses user-managed runtime without opt-in" {
+	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/retry.sh"; . "${0}/scripts/lib/nodejs.sh"; nodejs_runtime_audit() { printf "node_owner=user-nvm\nnpm_owner=user-nvm\n"; }; nodejs_install_global_packages example-package' "${REPO_ROOT}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"Refusing to install global npm packages into user-managed runtime"* ]]
+}

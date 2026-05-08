@@ -46,7 +46,7 @@ state_init() {
 
 state_valid_phase() {
 	case "$1" in
-	VALIDATE | DOWNLOAD | VERIFY | INSTALL | CONFIGURE | VERIFY_RUNTIME | COMPLETE | FAILED) return 0 ;;
+	VALIDATE | DOWNLOAD | VERIFY | RUNTIME_AUDIT | INSTALL | CONFIGURE | VERIFY_RUNTIME | COMPLETE | FAILED) return 0 ;;
 	*) return 1 ;;
 	esac
 }
