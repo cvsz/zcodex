@@ -31,12 +31,14 @@ bash scripts/doctor.sh --repair
 
 If a workflow emits tar restore warnings for cache keys such as
 `Linux-X64-bats-assert-*`, `Linux-X64-bats-detik-*`, or
-`Linux-X64-bats-file-*`, remove the third-party Bats helper setup path and use
+`Linux-X64-bats-file-*`, or `Linux-X64-bats-support-*`, remove the
+third-party Bats helper setup path and use
 the repository workflow pattern instead: install `bats` from the Ubuntu package
 manager and run `make workflow-policy` before `make test`. The workflow policy
 blocks both the helper actions and cache keys/paths such as `Linux-X64-bats-*`
 or `/usr/lib/bats-*`, because those archives can try to extract outside the
-workspace on GitHub-hosted runners. The current Bats tests load only
+workspace on GitHub-hosted runners or into privileged system directories such
+as `/usr/lib`. The current Bats tests load only
 `tests/test_helper.bash`, so restoring helper-library caches is unnecessary and
 can turn a cache hit into noisy `/usr/bin/tar` permission warnings.
 
