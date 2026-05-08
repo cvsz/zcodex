@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible zcodex problem
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For security issues, do not open a public issue; use SECURITY.md.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include exact commands and relevant flags.
+      placeholder: |
+        1. Run `...`
+        2. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS version, architecture, shell, WSL/container status, and zcodex version or commit.
+      placeholder: |
+        Ubuntu: 24.04
+        Architecture: amd64
+        Shell: bash
+        zcodex: v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant installer or doctor output. Redact secrets.
+      render: shell

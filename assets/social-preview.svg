@@ -1,0 +1,24 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">zcodex social preview</title>
+  <desc id="desc">Minimal dark social preview for zcodex with validate install configure verify flow.</desc>
+  <rect width="1280" height="640" fill="#0b1020"/>
+  <rect x="72" y="72" width="1136" height="496" rx="32" fill="#101827" stroke="#2dd4bf" stroke-opacity="0.32" stroke-width="2"/>
+  <text x="128" y="244" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="96" font-weight="700">zcodex</text>
+  <text x="134" y="306" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="28">Auditable Codex CLI bootstrap for Ubuntu</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" font-weight="600">
+    <rect x="136" y="402" width="180" height="58" rx="14" fill="#0f766e" fill-opacity="0.24" stroke="#2dd4bf" stroke-width="2"/>
+    <text x="163" y="439" fill="#ccfbf1">validate</text>
+    <path d="M336 431H414" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M404 419L416 431L404 443" stroke="#64748b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="436" y="402" width="168" height="58" rx="14" fill="#0f766e" fill-opacity="0.24" stroke="#2dd4bf" stroke-width="2"/>
+    <text x="477" y="439" fill="#ccfbf1">install</text>
+    <path d="M624 431H702" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M692 419L704 431L692 443" stroke="#64748b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="724" y="402" width="202" height="58" rx="14" fill="#0f766e" fill-opacity="0.24" stroke="#2dd4bf" stroke-width="2"/>
+    <text x="751" y="439" fill="#ccfbf1">configure</text>
+    <path d="M946 431H1024" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M1014 419L1026 431L1014 443" stroke="#64748b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="1046" y="402" width="150" height="58" rx="14" fill="#0f766e" fill-opacity="0.24" stroke="#2dd4bf" stroke-width="2"/>
+    <text x="1074" y="439" fill="#ccfbf1">verify</text>
+  </g>
+</svg>

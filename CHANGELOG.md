@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Root MIT license file and license verification guidance.
+- Contributor guide, security policy, roadmap, release checklist, and release notes template.
+- Repository audit and GitHub presentation strategy documentation.
+- Bug report and support issue templates.
+
+### Changed
+
+- Expanded README with CI badges, architecture diagrams, installation paths, troubleshooting flow, release documentation, and open-source readiness links.
+
 ## v0.1.0 - 2026-05-08
 
 Initial public release of zcodex.
