@@ -8,7 +8,7 @@ readonly ZCODEX_RELEASE_SCRIPT_DIR
 readonly ZCODEX_RELEASE_LIB_DIR="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/lib"
 ZCODEX_RELEASE_SCRIPT_NAME="$(basename "$0")"
 readonly ZCODEX_RELEASE_SCRIPT_NAME
-ZCODEX_RELEASE_LOG_FILE="${LOG_FILE:-${ZCODEX_RELEASE_LOG:-${ZCODEX_RELEASE_SCRIPT_DIR}/codex_release.log}}"
+ZCODEX_RELEASE_LOG_FILE="${ZCODEX_RELEASE_LOG:-${LOG_FILE:-${ZCODEX_RELEASE_SCRIPT_DIR}/codex_release.log}}"
 
 # shellcheck source=scripts/lib/exec.sh
 . "${ZCODEX_RELEASE_LIB_DIR}/exec.sh"
@@ -31,8 +31,15 @@ Examples:
 USAGE
 }
 
+release_log_prepare() {
+	local log_dir
+	log_dir="$(dirname "${ZCODEX_RELEASE_LOG_FILE}")"
+	mkdir -p "${log_dir}"
+}
+
 log() {
 	local message="$1"
+	release_log_prepare
 	printf '[Codex] %s\n' "${message}" | tee -a "${ZCODEX_RELEASE_LOG_FILE}"
 }
 
@@ -40,7 +47,8 @@ run_step() {
 	local description="$1"
 	shift
 
-	LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" runtime_exec_logged "${ZCODEX_RELEASE_LOG_FILE}" "${description}" "$@"
+	release_log_prepare
+	LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" runtime_exec_logged "${ZCODEX_RELEASE_LOG_FILE}" "${description}" env LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" "$@"
 }
 
 require_local_script() {
