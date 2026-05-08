@@ -10,6 +10,7 @@
 : "${LOG_FILE:=/tmp/zcodex-install.log}"
 : "${INSTALLER_PREVIOUS_PHASE:=}"
 : "${INSTALLER_STATE_STARTED:=false}"
+: "${ZCODEX_ROLLBACK_ON_FAILURE:=true}"
 
 installer_usage() {
 	cat <<USAGE
@@ -63,11 +64,15 @@ installer_cleanup() {
 	local exit_code=$?
 	if [[ "${DRY_RUN}" != "true" && "${INSTALLER_STATE_STARTED}" == "true" ]]; then
 		if ((exit_code == 0)); then
-			state_mark COMPLETE "installer completed" || true
+			state_mark COMPLETE "installer completed" complete || true
+			state_complete_phase COMPLETE || true
 			manifest_write complete || true
 		else
-			state_mark FAILED "exit_code=${exit_code}" || true
+			state_mark FAILED "exit_code=${exit_code}" failed || true
 			manifest_write failed || true
+			if [[ "${ZCODEX_ROLLBACK_ON_FAILURE}" == "true" ]]; then
+				backup_restore_all || true
+			fi
 		fi
 	fi
 	security_release_lock
@@ -80,8 +85,40 @@ installer_cleanup() {
 	exit "${exit_code}"
 }
 
+installer_phase_can_resume() {
+	case "$1" in
+	INSTALL | CONFIGURE) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+installer_run_phase() {
+	local phase="$1"
+	local message="$2"
+	shift 2
+
+	if installer_phase_can_resume "${phase}" && state_phase_completed "${phase}"; then
+		log_success "Skipping ${phase}; completed in previous interrupted run."
+		return 0
+	fi
+
+	state_mark "${phase}" "${message}" running
+	"$@"
+	state_complete_phase "${phase}"
+	manifest_write running
+}
+
+installer_prepare_recovery() {
+	if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
+		log_warn "Interrupted zcodex install detected: $(state_recovery_summary 2>/dev/null || printf 'phase=%s' "${INSTALLER_PREVIOUS_PHASE}")"
+		log_warn "Resuming with completed phase markers from ${ZCODEX_STATE_DIR}/completed.d."
+		return 0
+	fi
+
+	state_reset_progress
+}
+
 installer_prepare_runtime() {
-	state_mark DOWNLOAD "prepare runtime workspace"
 	security_acquire_lock "${LOCK_FILE}"
 	security_create_tmpdir >/dev/null
 	backup_init >/dev/null
@@ -91,12 +128,10 @@ installer_verify_inputs() {
 	if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
 		log_warn "Previous install state was incomplete at phase ${INSTALLER_PREVIOUS_PHASE}. Continuing deterministically."
 	fi
-	state_mark VERIFY "validate pins and interrupted state"
 	pins_validate
 }
 
 installer_install_core() {
-	state_mark INSTALL "install core runtime"
 	packages_update
 	packages_install_base
 	nodejs_install_ubuntu
@@ -122,16 +157,19 @@ installer_install_docker() {
 	docker_configure_user
 }
 
+installer_install_all() {
+	installer_install_core
+	installer_install_optional_packages
+	installer_install_docker
+}
+
 installer_configure_codex() {
-	state_mark CONFIGURE "configure codex runtime"
 	codex_write_config
 	shell_configure_codex
 }
 
 installer_verify_runtime() {
-	state_mark VERIFY_RUNTIME "validate installed tools"
 	codex_validate_cli || log_warn "Codex CLI validation did not pass in this environment."
-	manifest_write running
 }
 
 installer_run() {
@@ -158,12 +196,11 @@ installer_run() {
 
 	INSTALLER_PREVIOUS_PHASE="$(state_current_phase 2>/dev/null || true)"
 	INSTALLER_STATE_STARTED=true
-	state_mark VALIDATE "validate platform"
-	installer_prepare_runtime
-	installer_verify_inputs
-	installer_install_core
-	installer_install_optional_packages
-	installer_install_docker
-	installer_configure_codex
-	installer_verify_runtime
+	installer_prepare_recovery
+	installer_run_phase VALIDATE "validate platform" platform_validate
+	installer_run_phase DOWNLOAD "prepare runtime workspace" installer_prepare_runtime
+	installer_run_phase VERIFY "validate pins and interrupted state" installer_verify_inputs
+	installer_run_phase INSTALL "install core runtime" installer_install_all
+	installer_run_phase CONFIGURE "configure codex runtime" installer_configure_codex
+	installer_run_phase VERIFY_RUNTIME "validate installed tools" installer_verify_runtime
 }

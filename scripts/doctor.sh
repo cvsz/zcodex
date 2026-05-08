@@ -205,10 +205,45 @@ repair_shell_profile() {
 	shell_configure_codex
 }
 
+repair_manifest_state() {
+	local phase
+	local status
+
+	phase="$(state_current_phase 2>/dev/null || true)"
+	status="$(state_status 2>/dev/null || true)"
+	if [[ -z "${phase}" ]]; then
+		log_info "No zcodex install state found; writing an audit manifest for current runtime."
+		repair_codex_config || true
+		repair_shell_profile || true
+		state_mark VERIFY_RUNTIME "doctor repair initialized state" repair
+		manifest_write repair
+		return 0
+	fi
+
+	log_info "Repair context from install state: phase=${phase} status=${status:-unknown}."
+	case "${phase}" in
+	COMPLETE)
+		manifest_write repair
+		;;
+	CONFIGURE | VERIFY_RUNTIME | FAILED)
+		repair_codex_config || true
+		repair_shell_profile || true
+		manifest_write repair
+		;;
+	VALIDATE | DOWNLOAD | VERIFY | INSTALL)
+		log_warn "Install stopped during ${phase}; safe repair will refresh the manifest, but rerun scripts/install-codex-ubuntu.sh to finish package work."
+		manifest_write repair
+		;;
+	*)
+		log_warn "Unknown install phase ${phase}; refreshing manifest only."
+		manifest_write repair
+		;;
+	esac
+}
+
 run_repairs() {
 	log_section "zcodex repair"
-	repair_codex_config || true
-	repair_shell_profile || true
+	repair_manifest_state || true
 }
 
 check_versions() {
