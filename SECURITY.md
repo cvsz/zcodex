@@ -57,3 +57,17 @@ The project does not provide a sandbox for arbitrary model-generated commands, d
 ## Deterministic CI and E2E security validation
 
 Security validation is part of the primary CI workflow and the containerized E2E workflow. The test harness isolates HOME, TMPDIR, XDG directories, and PATH. Runtime behavior that depends on Node.js, npm, Codex, or `dpkg-query` should be represented as a fixture under `tests/runtime-fixtures/` rather than by relying on software preinstalled on a CI runner.
+
+## Runtime trust semantics
+
+- npm is trusted only when `node` and `npm` resolve to the same verified ownership
+  domain: distro APT, NodeSource APT, nvm, or asdf. Unknown or unowned binaries
+  block mutation in `clean-system` mode.
+- Global npm installs into nvm/asdf runtimes require
+  `ZCODEX_ALLOW_USER_RUNTIME_MUTATION=true`; this is an explicit operator
+  assertion that mutating the active user runtime is intended.
+- Privileged commands run with a fixed secure PATH. `sudo` must resolve from a
+  trusted system directory, and PATH entries that are writable by untrusted
+  principals are rejected before privileged work.
+- zcodex assumes `sudo` policy is already configured by the host administrator;
+  it does not attempt to bypass, weaken, or configure sudoers policy.

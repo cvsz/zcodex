@@ -140,7 +140,7 @@ jobs:
           version="$(tr -d '[:space:]' < VERSION)"
           cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
       - name: Verify checksums
-        run: cd dist && sha256sum -c SHA256SUMS
+        run: scripts/verify-release-artifacts.sh dist
       - name: Upload release dry-run artifacts
         uses: actions/upload-artifact@v7
         with:

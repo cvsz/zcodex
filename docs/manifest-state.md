@@ -153,3 +153,31 @@ Rollback stays deliberately narrow:
   than to downgrade blindly.
 - Set `ZCODEX_ROLLBACK_ON_FAILURE=false` when debugging a failed configuration
   step and you want to inspect the partially written files.
+
+## Schema v2, migration, integrity, and reconciliation
+
+Manifest schema v2 is the only writable schema for current releases. Legacy v1
+manifests are treated as recovery input and must be migrated with
+`manifest_migrate_file SOURCE [TARGET]` before they are accepted by strict
+validation. The v1 to v2 migration preserves phase/status, installer metadata,
+components, packages, platform facts, and verification hashes where present, and
+records the migration in a `migrations` array.
+
+Writers use deterministic JSON serialization (`sort_keys`, two-space
+indentation, UTF-8, trailing newline) and then seal the document with
+`integrity.canonical_sha256`. The digest is calculated over the same canonical
+JSON with `integrity.canonical_sha256` blanked, which gives operators a stable
+integrity check without a self-referential hash loop. Validation rejects
+corrupted JSON, unsupported schema versions, invalid phases/statuses, missing
+component names, and integrity mismatches.
+
+State reconciliation is explicit and conservative:
+
+1. Validate persisted `current_phase` against the known phase set.
+2. Validate persisted `status` against the known status set.
+3. Remove invalid completed-phase marker files under `completed.d/`.
+4. Normalize stale `COMPLETE`/status combinations.
+5. Mark the install `FAILED` if persisted phase or status is invalid.
+
+Interrupted installs remain resumable because completed phase markers are
+advisory and individually validated before the installer skips work.

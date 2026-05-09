@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor diagnostics validate ci-local release release-checksum release-reproducible
+.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor diagnostics validate ci-local release release-checksum release-verify release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -54,6 +54,9 @@ release:
 
 release-checksum:
 	cd dist && sha256sum -c SHA256SUMS
+
+release-verify:
+	bash scripts/verify-release-artifacts.sh dist
 
 release-reproducible:
 	rm -rf dist.repro-a dist.repro-b

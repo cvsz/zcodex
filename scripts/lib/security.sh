@@ -110,6 +110,7 @@ security_create_tmpdir() {
 	local parent
 	parent="${TMPDIR:-/tmp}"
 	[[ -d "${parent}" ]] || parent=/tmp
+	security_validate_tmp_parent "${parent}" || parent=/tmp
 	ZCODEX_TMP_DIR="$(mktemp -d "${parent%/}/zcodex.XXXXXXXXXX")"
 	chmod 700 "${ZCODEX_TMP_DIR}"
 	printf '%s\n' "${ZCODEX_TMP_DIR}"
@@ -209,4 +210,46 @@ security_download_verified() {
 
 	security_download "${url}" "${output}"
 	security_verify_manifest_entry "${manifest}" "${output}"
+}
+
+security_command_trusted_path() {
+	local command_name="$1"
+	local command_path
+	command_path="$(command -v "${command_name}" 2>/dev/null || true)"
+	[[ -n "${command_path}" ]] || return 1
+	case "${command_path}" in
+	/usr/bin/* | /bin/* | /usr/sbin/* | /sbin/* | /usr/local/bin/* | /usr/local/sbin/*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+security_detect_path_shadowing() {
+	local failed=0 command_name command_path
+	for command_name in "$@"; do
+		command_path="$(command -v "${command_name}" 2>/dev/null || true)"
+		[[ -n "${command_path}" ]] || continue
+		if ! security_command_trusted_path "${command_name}"; then
+			log_error "Command ${command_name} resolves outside trusted PATH boundary: ${command_path}"
+			failed=1
+		fi
+	done
+	((failed == 0))
+}
+
+security_validate_tmp_parent() {
+	local parent="${1:-${TMPDIR:-/tmp}}"
+	local mode
+	[[ -d "${parent}" ]] || return 1
+	mode="$(stat -Lc '%a' "${parent}" 2>/dev/null || printf '0')"
+	case "${mode: -1}" in
+	2 | 3 | 6 | 7)
+		case "${mode}" in
+		*1?? | *[0-9]1[0-9] | *[0-9][0-9]1) return 0 ;;
+		*)
+			log_error "Temporary directory ${parent} is world-writable without sticky bit."
+			return 1
+			;;
+		esac
+		;;
+	esac
 }

@@ -70,3 +70,17 @@ bash scripts/install-codex-ubuntu.sh --skip-docker
 ### Restore a backed-up config or shell profile
 
 Find the latest backup directory and copy the saved file back to its original path. For example, if `${HOME}/.codex/config.toml` was overwritten, restore `${HOME}/.zcodex/backups/<timestamp>/<home-path>/.codex/config.toml` to `${HOME}/.codex/config.toml`, then run doctor mode again.
+
+## Deterministic diagnostics and failure bundles
+
+`scripts/diagnostics.sh` writes a deterministic failure bundle under
+`diagnostics/` by default. The bundle contains:
+
+- `runtime-snapshot.json` with command versions and hashed PATH details;
+- `state-snapshot.json` with phase/status and state-history digest;
+- `manifest-snapshot.json` when a readable manifest exists;
+- the raw manifest and installer log when present.
+
+The tarball uses sorted entries, normalized owner/group metadata, UTC timestamps,
+and `gzip -n`. Set `SOURCE_DATE_EPOCH` to reproduce bundle mtimes exactly across
+machines.
