@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# =========================================================
-# CODEX-MAX AUTONOMOUS EXECUTION PIPELINE
-# Repository: cvsz/zcodex
-# =========================================================
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROMPT_DIR="${ROOT_DIR}/cvsz/zcodex/prompts"
-LOG_DIR="${ROOT_DIR}/cvsz/zcodex/logs"
-REPORT_DIR="${ROOT_DIR}/cvsz/zcodex/reports"
+ROOT="$ROOT_DIR/.codex"
+PROMPT_DIR="$ROOT/prompts"
+LOG_DIR="$ROOT/logs"
+REPORT_DIR="$ROOT/reports"
+PATCH_DIR="$ROOT/patches"
+STATE_DIR="$ROOT/state"
 
-mkdir -p "${LOG_DIR}"
-mkdir -p "${REPORT_DIR}"
-
-# =========================================================
-# PROMPT LIST
-# =========================================================
+mkdir -p \
+  "$LOG_DIR" \
+  "$REPORT_DIR" \
+  "$PATCH_DIR" \
+  "$STATE_DIR"
 
 PROMPTS=(
   "00_global_system_prompt.txt"
@@ -32,155 +29,99 @@ PROMPTS=(
   "10_final_validation.txt"
 )
 
-# =========================================================
-# SETTINGS
-# =========================================================
+CODEX_BIN="${CODEX_BIN:-codex}"
 
-MAX_RETRIES=2
-SLEEP_BETWEEN=2
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+MASTER_LOG="$LOG_DIR/master_run_${TIMESTAMP}.log"
 
-# Optional environment flags
-export CODEX_DISABLE_TELEMETRY=1
-export CODEX_AUTONOMOUS_MODE=1
-export CODEX_RECURSIVE_FIX=1
-export CODEX_OUTPUT_FORMAT=json
-
-# =========================================================
-# HELPERS
-# =========================================================
-
-timestamp() {
-  date +"%Y-%m-%d %H:%M:%S"
-}
-
-log() {
-  echo "[$(timestamp)] $*"
-}
+echo "========================================" | tee -a "$MASTER_LOG"
+echo "CODEX-MAX AUTONOMOUS EXECUTION PIPELINE" | tee -a "$MASTER_LOG"
+echo "Repository: $ROOT_DIR" | tee -a "$MASTER_LOG"
+echo "Timestamp : $TIMESTAMP" | tee -a "$MASTER_LOG"
+echo "========================================" | tee -a "$MASTER_LOG"
 
 run_prompt() {
   local prompt_file="$1"
+  local prompt_path="$PROMPT_DIR/$prompt_file"
 
-  local full_path="${PROMPT_DIR}/${prompt_file}"
-
-  if [[ ! -f "${full_path}" ]]; then
-    log "ERROR: Missing prompt file: ${full_path}"
+  if [[ ! -f "$prompt_path" ]]; then
+    echo "[ERROR] Missing prompt: $prompt_path" | tee -a "$MASTER_LOG"
     return 1
   fi
 
-  local base_name
-  base_name="$(basename "${prompt_file}" .txt)"
+  local base
+  base="$(basename "$prompt_file" .txt)"
 
-  local log_file="${LOG_DIR}/${base_name}.log"
-  local json_file="${REPORT_DIR}/${base_name}.json"
+  local phase_log="$LOG_DIR/${base}_${TIMESTAMP}.log"
 
-  log "===================================================="
-  log "RUNNING: ${prompt_file}"
-  log "===================================================="
+  echo "" | tee -a "$MASTER_LOG"
+  echo "========================================" | tee -a "$MASTER_LOG"
+  echo "[START] $prompt_file" | tee -a "$MASTER_LOG"
+  echo "========================================" | tee -a "$MASTER_LOG"
 
-  local attempt=1
+  local start_ts
+  start_ts="$(date +%s)"
 
-  while [[ ${attempt} -le ${MAX_RETRIES} ]]; do
-    log "Attempt ${attempt}/${MAX_RETRIES}"
+  set +e
+  "$CODEX_BIN" run "$prompt_path" 2>&1 | tee "$phase_log"
+  local exit_code=$?
+  set -e
 
-    if codex run "${full_path}" \
-      --json-output "${json_file}" \
-      2>&1 | tee "${log_file}"; then
+  local end_ts
+  end_ts="$(date +%s)"
 
-      log "SUCCESS: ${prompt_file}"
-      return 0
-    fi
+  local duration
+  duration="$((end_ts - start_ts))"
 
-    log "FAILED: ${prompt_file}"
-    ((attempt++))
+  echo "" | tee -a "$MASTER_LOG"
+  echo "[END] $prompt_file" | tee -a "$MASTER_LOG"
+  echo "Exit Code : $exit_code" | tee -a "$MASTER_LOG"
+  echo "Duration  : ${duration}s" | tee -a "$MASTER_LOG"
+  echo "Log File  : $phase_log" | tee -a "$MASTER_LOG"
 
-    sleep "${SLEEP_BETWEEN}"
-  done
+  echo "$exit_code" > "$STATE_DIR/${base}.exitcode"
 
-  log "FINAL FAILURE: ${prompt_file}"
-  return 1
+  if [[ "$exit_code" -ne 0 ]]; then
+    echo "[WARNING] Prompt failed: $prompt_file" | tee -a "$MASTER_LOG"
+  else
+    echo "[SUCCESS] Prompt completed: $prompt_file" | tee -a "$MASTER_LOG"
+  fi
 }
 
-# =========================================================
-# PRECHECKS
-# =========================================================
-
-if ! command -v codex >/dev/null 2>&1; then
-  echo "ERROR: codex CLI not installed"
+if ! command -v "$CODEX_BIN" >/dev/null 2>&1; then
+  echo "ERROR: $CODEX_BIN CLI not installed"
   exit 1
 fi
-
-if [[ ! -d "${PROMPT_DIR}" ]]; then
-  echo "ERROR: Prompt directory not found: ${PROMPT_DIR}"
-  exit 1
-fi
-
-# =========================================================
-# EXECUTION
-# =========================================================
-
-START_TS=$(date +%s)
-
-log "Starting Codex-Max Autonomous Pipeline"
-
-FAILED_PHASES=()
 
 for prompt in "${PROMPTS[@]}"; do
-  if ! run_prompt "${prompt}"; then
-    FAILED_PHASES+=("${prompt}")
+  run_prompt "$prompt"
+done
+
+echo "" | tee -a "$MASTER_LOG"
+echo "========================================" | tee -a "$MASTER_LOG"
+echo "PIPELINE SUMMARY" | tee -a "$MASTER_LOG"
+echo "========================================" | tee -a "$MASTER_LOG"
+
+FAILED=0
+
+for prompt in "${PROMPTS[@]}"; do
+  base="$(basename "$prompt" .txt)"
+  code="$(cat "$STATE_DIR/${base}.exitcode" 2>/dev/null || echo 999)"
+
+  if [[ "$code" -eq 0 ]]; then
+    echo "[OK]     $prompt" | tee -a "$MASTER_LOG"
+  else
+    echo "[FAILED] $prompt (exit=$code)" | tee -a "$MASTER_LOG"
+    FAILED=1
   fi
 done
 
-END_TS=$(date +%s)
-DURATION=$((END_TS - START_TS))
+echo "" | tee -a "$MASTER_LOG"
 
-# =========================================================
-# SUMMARY
-# =========================================================
-
-echo
-echo "===================================================="
-echo "PIPELINE SUMMARY"
-echo "===================================================="
-echo "Duration: ${DURATION}s"
-
-if [[ ${#FAILED_PHASES[@]} -eq 0 ]]; then
-  echo "Status: SUCCESS"
-  echo "All phases completed successfully."
+if [[ "$FAILED" -eq 0 ]]; then
+  echo "[FINAL STATUS] ALL PHASES COMPLETED SUCCESSFULLY" | tee -a "$MASTER_LOG"
 else
-  echo "Status: FAILED"
-  echo "Failed phases:"
-  for failed in "${FAILED_PHASES[@]}"; do
-    echo " - ${failed}"
-  done
+  echo "[FINAL STATUS] SOME PHASES FAILED" | tee -a "$MASTER_LOG"
 fi
 
-echo
-echo "Logs:     ${LOG_DIR}"
-echo "Reports:  ${REPORT_DIR}"
-
-# =========================================================
-# OPTIONAL RECURSIVE MODE
-# =========================================================
-
-if [[ "${1:-}" == "--recursive" ]]; then
-  echo
-  echo "===================================================="
-  echo "RECURSIVE VALIDATION LOOP"
-  echo "===================================================="
-
-  PASS=1
-  MAX_PASSES=3
-
-  while [[ ${PASS} -le ${MAX_PASSES} ]]; do
-    echo
-    log "Recursive pass ${PASS}/${MAX_PASSES}"
-
-    run_prompt "07_recursive_bugfix_loop.txt"
-    run_prompt "10_final_validation.txt"
-
-    ((PASS++))
-  done
-fi
-
-echo
-log "Pipeline completed."
+echo "Master Log: $MASTER_LOG" | tee -a "$MASTER_LOG"
