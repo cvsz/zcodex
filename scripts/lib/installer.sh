@@ -103,10 +103,14 @@ installer_cleanup() {
 	local exit_code=$?
 	if [[ "${DRY_RUN}" != "true" && "${INSTALLER_STATE_STARTED}" == "true" ]]; then
 		if ((exit_code == 0)); then
+			runtime_ctx_set phase COMPLETE || true
+			runtime_ctx_set phase_status complete || true
 			state_mark COMPLETE "installer completed" complete || true
 			state_complete_phase COMPLETE || true
 			manifest_write complete || true
 		else
+			runtime_ctx_set phase FAILED || true
+			runtime_ctx_set phase_status failed || true
 			state_mark FAILED "exit_code=${exit_code}" failed || true
 			manifest_write failed || true
 			if [[ "${ZCODEX_ROLLBACK_ON_FAILURE}" == "true" ]]; then
@@ -137,12 +141,18 @@ installer_run_phase() {
 	shift 2
 
 	if installer_phase_can_resume "${phase}" && state_phase_completed "${phase}"; then
+		runtime_ctx_set phase "${phase}"
+		runtime_ctx_set phase_status skipped
 		log_success "Skipping ${phase}; completed in previous interrupted run."
 		return 0
 	fi
 
+	runtime_ctx_set phase "${phase}"
+	runtime_ctx_set phase_message "${message}"
+	runtime_ctx_set phase_status running
 	state_mark "${phase}" "${message}" running
 	"$@"
+	runtime_ctx_set phase_status completed
 	state_complete_phase "${phase}"
 	manifest_write running
 }

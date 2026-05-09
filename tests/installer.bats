@@ -166,7 +166,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 }
 
 @test "runtime loader exposes modular installer functions" {
-	run bash -c '. "${0}/scripts/lib/runtime.sh"; declare -F platform_validate security_download codex_write_config shell_configure_codex installer_run installer_install_docker >/dev/null' "${REPO_ROOT}"
+	run bash -c '. "${0}/scripts/lib/runtime.sh"; declare -F runtime_ctx_set platform_validate security_download codex_write_config shell_configure_codex installer_run installer_install_docker >/dev/null' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
 }
 
@@ -606,4 +606,21 @@ YAML
 	[[ "$output" == *"support-install:"* ]]
 	[[ "$output" == *"actions/checkout@v4"* ]]
 	[[ "$output" == *"actions/cache@"* ]]
+}
+
+@test "runtime context stores sorted explicit phase metadata" {
+	run bash -c '. "${0}/scripts/lib/context.sh"; runtime_ctx_set phase INSTALL; runtime_ctx_set phase_status running; runtime_ctx_snapshot' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[ "$output" = $'phase=INSTALL
+phase_status=running' ]
+}
+
+@test "installer phase updates explicit runtime context" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/runtime.sh"; logging_init; installer_run_phase VERIFY "context test" true; runtime_ctx_get phase; runtime_ctx_get phase_status' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'VERIFY
+completed'* ]]
 }
