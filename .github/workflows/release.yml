@@ -107,8 +107,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          expected_tag="v$(tr -d '[:space:]' < VERSION)"
-          test "${GITHUB_REF_NAME}" = "${expected_tag}"
+          scripts/validate-release-tag.sh "${GITHUB_REF_NAME}"
 
       - name: Validate environment, shellcheck, shfmt, and Bats
         run: make validate

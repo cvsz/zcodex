@@ -76,12 +76,8 @@ validate_release_context() {
 	git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git work tree"
 	git -C "${REPO_ROOT}" rev-parse --verify "${GIT_REF}^{tree}" >/dev/null 2>&1 || fail "invalid archive ref: ${GIT_REF}"
 
-	if [[ -n "${GITHUB_REF_TYPE:-}" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME:-}" != "${tag}" ]]; then
-		fail "GitHub tag ${GITHUB_REF_NAME} does not match VERSION-derived tag ${tag}"
-	fi
-
-	if [[ -n "${GITHUB_REF_NAME:-}" && "${GITHUB_REF_NAME}" =~ ^v && "${GITHUB_REF_NAME}" != "${tag}" ]]; then
-		fail "release tag ${GITHUB_REF_NAME} does not match VERSION-derived tag ${tag}"
+	if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+		"${SCRIPT_DIR}/validate-release-tag.sh" "${GITHUB_REF_NAME:-${tag}}" || fail "release tag validation failed"
 	fi
 }
 
