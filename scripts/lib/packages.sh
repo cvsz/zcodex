@@ -6,7 +6,7 @@ packages_update() {
 		log_error "APT capability is required for package metadata updates."
 		return 1
 	fi
-	retry 3 2 runtime_privileged apt-get update
+	retry 3 2 runtime_privileged env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true TZ=Etc/UTC apt-get update
 }
 
 packages_install() {
@@ -18,7 +18,8 @@ packages_install() {
 	if ((${#packages[@]} == 0)); then
 		return 0
 	fi
-	retry 3 2 runtime_privileged env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+	retry 3 2 runtime_privileged env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true TZ=Etc/UTC apt-get install -y \
+		-o Dpkg::Options::=--force-confdef \
 		-o Dpkg::Options::=--force-confnew \
 		"${packages[@]}"
 }

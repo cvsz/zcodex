@@ -246,6 +246,45 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	[[ "$output" == *"Dry run completed without making changes"* ]]
 }
 
+@test "release orchestrator falls back when default log path is unwritable" {
+	local tmpbin blocked_path
+	tmpbin="$(zcodex_tmpdir)"
+	blocked_path="${ZCODEX_TEST_WORKDIR}/not-a-directory"
+	printf 'blocked\n' >"${blocked_path}"
+	local command_name command_path
+	for command_name in bash basename cat date dirname env mkdir tee; do
+		command_path="$(type -P "${command_name}")"
+		ln -s "${command_path}" "${tmpbin}/${command_name}"
+	done
+
+	run env -u NVM_DIR CI=true HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="${tmpbin}" TMPDIR="${ZCODEX_TEST_WORKDIR}/tmp" LOG_FILE="${blocked_path}/release.log" bash "${REPO_ROOT}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"not writable; using ${ZCODEX_TEST_WORKDIR}/tmp/zcodex/codex_release.log instead"* ]]
+	[[ "$output" == *"Dry run completed without making changes"* ]]
+	[ -s "${ZCODEX_TEST_WORKDIR}/tmp/zcodex/codex_release.log" ]
+}
+
+@test "apt package helpers force noninteractive timezone-safe installs" {
+	local tmpbin
+	tmpbin="$(zcodex_tmpdir)"
+	cat >"${tmpbin}/apt-get" <<'SH'
+#!/usr/bin/env bash
+printf 'DEBIAN_FRONTEND=%s\n' "${DEBIAN_FRONTEND:-}"
+printf 'DEBCONF_NONINTERACTIVE_SEEN=%s\n' "${DEBCONF_NONINTERACTIVE_SEEN:-}"
+printf 'TZ=%s\n' "${TZ:-}"
+printf 'args=%s\n' "$*"
+SH
+	chmod +x "${tmpbin}/apt-get"
+	run env PATH="${tmpbin}:/usr/bin:/bin" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/retry.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/exec.sh"; . "${0}/scripts/lib/packages.sh"; runtime_privileged() { "$@"; }; packages_install tzdata' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"DEBIAN_FRONTEND=noninteractive"* ]]
+	[[ "$output" == *"DEBCONF_NONINTERACTIVE_SEEN=true"* ]]
+	[[ "$output" == *"TZ=Etc/UTC"* ]]
+	[[ "$output" == *"--force-confdef"* ]]
+}
+
 @test "pins validate default deterministic versions" {
 	run bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/pins.sh"; pins_validate; pins_summary' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]

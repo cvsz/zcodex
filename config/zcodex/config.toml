@@ -115,12 +115,16 @@ set -euo pipefail
 set -e
 
 MODE=${1:?Usage: codex.sh {basic|full|ultimate|orchestrator|release}}
-LOGFILE="codex_release.log"
+LOGFILE="${ZCODEX_RELEASE_LOG:-${TMPDIR:-/tmp}/zcodex/codex_release.log}"
+mkdir -p "$(dirname "${LOGFILE}")"
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+export TZ="${TZ:-Etc/UTC}"
 
 # --- Environment Validation ---
 echo "[Codex] Validating environment..." | tee -a "${LOGFILE}"
-command -v docker >/dev/null 2>&1 || { echo >&2 "Docker not installed. Aborting."; exit 1; }
-command -v node >/dev/null 2>&1 || { echo >&2 "Node.js not installed. Aborting."; exit 1; }
+command -v docker >/dev/null 2>&1 || echo "[Codex] Warning: Docker not found; installer will handle Docker according to selected flags." | tee -a "${LOGFILE}"
+command -v node >/dev/null 2>&1 || echo "[Codex] Warning: Node.js not found; installer can install it on supported Ubuntu hosts." | tee -a "${LOGFILE}"
 command -v kubectl >/dev/null 2>&1 || echo "[Codex] Warning: Kubernetes not found, skipping cluster orchestration." | tee -a "${LOGFILE}"
 
 # --- Mode Selection ---
