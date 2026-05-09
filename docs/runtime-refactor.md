@@ -19,6 +19,10 @@ The current direction is to keep environment variables as the external API, but 
 
 The installer uses a single `EXIT` trap for cleanup, state finalization, manifest writes, lock release, temporary directory cleanup, and rollback. That is operationally simple but risky if future libraries install their own `EXIT` trap. `runtime_trap_install_exit` now centralizes trap installation and warns before replacing an existing handler.
 
+### Explicit runtime context
+
+The runtime now exposes a small in-process context map through `runtime_ctx_set`, `runtime_ctx_get`, `runtime_ctx_unset`, and `runtime_ctx_snapshot`. This is intentionally not a shell framework; it is a narrow place for orchestration metadata such as the active phase, phase message, and phase status so phase-aware helpers do not need to infer that state from unrelated globals. Persistent state still belongs in the manifest and state files.
+
 ### Mutable shared state
 
 Shared mutable state is still present where Bash makes it pragmatic: parser flags, install phase state on disk, backup roots, and security lock descriptors. The safer rule is now:
