@@ -137,18 +137,57 @@ PYCHECK
 	[[ "$output" == *'"check_id":"doctor.network.offline"'* ]]
 }
 
-@test "strict PATH validation rejects user local bin but warns for dotnet" {
+@test "strict PATH validation downgrades medium user-local risk to warnings" {
 	local tmpdir
 	tmpdir="$(zcodex_tmpdir)"
-	mkdir -p "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
-	chmod 777 "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
+	mkdir -p "${tmpdir}/home/user/.dotnet"
+	chmod 755 "${tmpdir}/home/user/.dotnet"
 	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_validate_path "${HOME}/.dotnet:/usr/bin" strict' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"User-local .dotnet PATH entry detected during privileged validation"* ]]
-	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_validate_path "${HOME}/.local/bin:/usr/bin" strict' "${REPO_ROOT}"
+	[[ "$output" == *"PATH risk warning"* ]]
+	[[ "$output" == *"score=65"* ]]
+	[[ "$output" == *"classification=USER_LOCAL_RISKY"* ]]
+}
+
+@test "advanced PATH risk analysis emits per-entry JSON for warning and allow actions" {
+	local tmpdir output_file
+	tmpdir="$(zcodex_tmpdir)"
+	output_file="$(zcodex_tmpfile)"
+	mkdir -p "${tmpdir}/home/user/.dotnet"
+	chmod 755 "${tmpdir}/home/user/.dotnet"
+	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_analyze_path "${1}:/usr/bin" strict true' "${REPO_ROOT}" "${tmpdir}/home/user/.dotnet"
+	printf '%s\n' "$output" >"${output_file}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	python3 - "${output_file}" <<'PYCHECK'
+import json
+import sys
+entries = [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.startswith("{")]
+assert len(entries) == 2, entries
+risky = entries[0]
+assert risky["classification"] == "USER_LOCAL_RISKY", risky
+assert risky["risk_score"] == 65, risky
+assert risky["action"] == "warn", risky
+system = entries[1]
+assert system["classification"] == "TRUSTED_SYSTEM", system
+assert system["risk_score"] == 0, system
+assert system["action"] == "allow", system
+PYCHECK
+	rm -f "${output_file}"
+}
+
+@test "strict PATH risk analysis blocks critical writable directories before system PATH" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/unknown"
+	chmod 777 "${tmpdir}/unknown"
+	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_validate_path "${1}:/usr/bin" strict' "${REPO_ROOT}" "${tmpdir}/unknown"
 	rm -rf "${tmpdir}"
 	[ "$status" -ne 0 ]
-	[[ "$output" == *"PATH entry is writable by an untrusted principal"* ]]
+	[[ "$output" == *"PATH risk blocked"* ]]
+	[[ "$output" == *"score=85"* ]]
+	[[ "$output" == *"classification=USER_LOCAL_RISKY"* ]]
 }
 
 @test "doctor treats docker as optional" {
