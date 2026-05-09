@@ -1,34 +1,29 @@
 name: release-validate
-
 on:
   workflow_run:
-    workflows:
-      - release
-    types:
-      - completed
-
+    workflows: [release]
+    types: [completed]
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
-  run:
-    shell: bash
-
+  run: {shell: bash}
 jobs:
   validate:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: github.event.workflow_run.conclusion == 'success' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: dawidd6/action-download-artifact@v6
         with:
-          name: release
-      - name: Validate artifact
-        run: |
-          set -euxo pipefail
-          test -f release.tar.gz
-          tar -tzf release.tar.gz
+          workflow: release.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: release-${{ github.event.workflow_run.head_branch }}
+          path: dist
+          if_no_artifact_found: fail
+      - run: |
+          set -Eeuo pipefail
+          ls -la dist
+          test -f dist/SHA256SUMS

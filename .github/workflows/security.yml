@@ -1,42 +1,47 @@
 name: security
-
 on:
   push:
   pull_request:
   schedule:
     - cron: '0 3 * * *'
-
 permissions:
   contents: read
   security-events: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
   run:
     shell: bash
-
 jobs:
   scan:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install scanners
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install semgrep
         run: |
-          set -euxo pipefail
-          pip install semgrep bandit safety
-      - name: Semgrep
-        run: semgrep scan . || true
-      - name: Bandit
-        run: bandit -r . || true
-      - name: Safety
-        run: safety check || true
+          set -Eeuo pipefail
+          python -m pip install --upgrade pip
+          pip install semgrep
+      - name: Semgrep SARIF
+        run: |
+          set -Eeuo pipefail
+          semgrep scan --config auto --sarif --output semgrep.sarif .
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-debug-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: ./**/*.log
