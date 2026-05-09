@@ -6,24 +6,74 @@
 [![release](https://github.com/cvsz/zcodex/actions/workflows/release.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`zcodex` is a minimal, auditable Ubuntu bootstrapper for Codex CLI environments. It installs and validates a Codex-ready runtime with small Bash libraries, explicit state transitions, rollback-aware file writes, and CI-visible release automation.
+`zcodex` is a Bash-based Ubuntu bootstrapper for Codex CLI runtimes. It installs and validates a small, auditable runtime using deterministic phase ordering, explicit state files, runtime ownership checks, reproducible release artifacts, and CI-visible validation paths.
 
-## Why zcodex exists
+## Project overview
 
-Codex runtime setup should be easy to inspect, safe to dry-run, and simple to recover. This repository keeps installation logic modular instead of hiding it behind a monolithic script or remote execution pipeline.
+The repository is maintained as infrastructure code, not as a remote installer blob. Entry points call small Bash libraries under `scripts/lib/`, write runtime state under XDG-style directories, and expose repeatable checks through `make` targets and GitHub Actions.
 
-`zcodex` focuses on:
+Primary goals:
 
-- Ubuntu-first Codex CLI bootstrap and validation.
-- Deterministic install phases and machine-readable runtime manifests.
-- Security-conscious download, checksum, tempfile, lockfile, and rollback primitives.
-- Clear CI, release, troubleshooting, and contribution paths for open-source maintenance.
+- Bootstrap Codex CLI on supported Ubuntu hosts.
+- Keep installer behavior reviewable and shellcheck-compatible.
+- Detect unsafe `PATH`, runtime ownership, and package-manager conflicts before mutation.
+- Support dry-run, repair, diagnostics, release, and E2E workflows.
+- Produce release archives with reproducible SHA-256 hashes for a fixed Git tree.
 
-## Stabilization scope
+## Architecture overview
 
-The current release hardening pass focuses on the failure modes that usually make bootstrap repositories unsafe to operate at scale: host PATH leakage, runner-owned Node.js/npm assumptions, mutable shared state, nondeterministic archives, malformed manifests, interrupted installs, and release workflow drift. The repository is structured so each of those concerns has an explicit script, fixture, test, workflow, or document instead of relying on undocumented runner behavior.
+```text
+operator / CI
+  ├─ codex.sh                         # workflow orchestrator
+  ├─ scripts/install-codex-ubuntu.sh   # installer entry point
+  ├─ scripts/doctor.sh                 # runtime validation and repair
+  ├─ scripts/e2e-runner.sh             # isolated Ubuntu scenario runner
+  └─ scripts/release.sh                # deterministic release builder
 
-## Quick start
+scripts/lib/
+  ├─ runtime, installer, state, manifest
+  ├─ platform, environment, dependencies
+  ├─ security, exec, retry, backup
+  └─ packages, nodejs, docker, codex, shell
+```
+
+The installer advances through `VALIDATE`, `DOWNLOAD`, `VERIFY`, `INSTALL`, `CONFIGURE`, `VERIFY_RUNTIME`, and `COMPLETE`. Failures mark `FAILED` and preserve enough state for doctor and diagnostics workflows to explain the recovery path.
+
+## Deterministic runtime philosophy
+
+`zcodex` minimizes ambient host assumptions. Runtime decisions are made from observed capabilities, pinned expectations, explicit flags, and committed fixtures rather than from a developer workstation's current shell state.
+
+Determinism is enforced by:
+
+- Sorted, normalized release archives with stable gzip headers.
+- CI and E2E plans that isolate npm cache, prefix, home, state, and temporary paths.
+- Runtime fixture tests for clean, stale, broken, conflicting, interrupted, and shadowed environments.
+- Linear phase state and manifest records for installs.
+- Secure command lookup rules that reject unsafe `PATH` entries and shadowed privileged tools.
+
+## Runtime ownership model
+
+The installer audits visible `node`, `npm`, and `codex` binaries before modifying the system. It classifies runtimes as apt distro, NodeSource, nvm, asdf, system-unowned, unknown, or absent, then applies a runtime-mode policy.
+
+| Mode | Use case | Mutation policy |
+| --- | --- | --- |
+| `clean-system` | Fresh supported Ubuntu host | May install managed apt packages when no unsafe conflict exists. |
+| `existing-runtime` | Workstation with activated Node.js/npm | Does not mutate Node.js/npm; requires compatible active tools. |
+| `ci` | Prebuilt CI image | Does not mutate Node.js/npm; selected by `--ci`. |
+| `developer` | Explicit local development override | Allows user-runtime mutation only when the opt-in environment flag is set. |
+| `production` | Locked runtime host | No implicit runtime mutation; conflicts fail early. |
+
+## Supported platforms
+
+Primary support targets:
+
+- Ubuntu 22.04 LTS and Ubuntu 24.04 LTS.
+- `amd64`/`x86_64` and `arm64`/`aarch64`.
+- Native Ubuntu hosts, common containers, and WSL-aware execution.
+
+Other Linux environments are best-effort only. Capability checks determine whether apt, systemd, Docker, sudo, rootless behavior, and required shell tooling are available. Unsupported hosts should use dry-run and doctor mode before any installation attempt.
+
+## Install instructions
 
 Clone the repository and run the installer:
 
@@ -33,54 +83,14 @@ cd zcodex
 bash scripts/install-codex-ubuntu.sh
 ```
 
-Recommended dry run for review or CI:
+Recommended review path:
 
 ```bash
 CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
+bash scripts/doctor.sh --offline
 ```
 
-Run health checks after installation:
-
-```bash
-bash scripts/doctor.sh
-```
-
-Validate the deterministic E2E scenario plan without Docker:
-
-```bash
-bash scripts/e2e-runner.sh --dry-run --ubuntu 24.04 --arch amd64
-```
-
-## Supported platforms
-
-Primary support targets:
-
-- Ubuntu 22.04 LTS
-- Ubuntu 24.04 LTS
-- `x86_64`/`amd64`
-- `aarch64`/`arm64`
-
-Runtime awareness:
-
-- Native Ubuntu hosts.
-- WSL environments.
-- Common container runtimes.
-- Optional Docker availability.
-
-Other environments are best-effort only. The installer detects capabilities such as APT, systemd, Docker, and rootless behavior before deciding what it can safely do.
-
-## Installation options
-
-Common installer commands:
-
-```bash
-bash scripts/install-codex-ubuntu.sh
-bash scripts/install-codex-ubuntu.sh --skip-optional
-bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
-CI=true bash scripts/install-codex-ubuntu.sh --ci --skip-docker
-```
-
-Unified release orchestrator commands:
+Or use the orchestrator:
 
 ```bash
 ./codex.sh basic --dry-run --skip-docker
@@ -90,218 +100,151 @@ Unified release orchestrator commands:
 ./codex.sh release --skip-optional
 ```
 
-`codex.sh` is the master entry point for installer and release workflows. It validates the local environment, records each step to a combined operational log, and dispatches to the correct installer or validation path for the selected mode.
+## Installer options
 
-| Mode | Workflow |
+Common flags:
+
+| Flag | Purpose |
 | --- | --- |
-| `basic` | Runs `scripts/install-codex-ubuntu.sh` with any extra installer arguments. |
-| `full` | Runs the installer, then performs an offline doctor check. |
-| `ultimate` | Runs environment validation, the installer, and an online doctor check. |
-| `orchestrator` | Runs `scripts/doctor.sh` with any extra doctor arguments. |
-| `release` | Runs the installer and final doctor validation for release readiness. |
+| `--dry-run` | Print the plan without package, npm, Docker, or shell-profile mutation. |
+| `--skip-docker` | Do not install or validate Docker as part of the install path. |
+| `--skip-optional` | Skip optional components and keep the runtime minimal. |
+| `--ci` | Select CI-safe runtime behavior and noninteractive defaults. |
+| `--runtime-mode MODE` | Select `clean-system`, `existing-runtime`, `ci`, `developer`, or `production`. |
 
-The orchestrator checks for `bash`, warns when optional cluster or runtime tools such as `kubectl`, Docker, or Node.js are unavailable, and leaves fatal dependency decisions to the selected installer or doctor mode. It writes to `codex_release.log` by default, honors `ZCODEX_RELEASE_LOG` or `LOG_FILE` when set, and falls back to `${TMPDIR:-/tmp}/zcodex/codex_release.log` if the requested log path is not writable.
+Use `bash scripts/install-codex-ubuntu.sh --help` for the active flag list.
 
-## Architecture
+## Repair and recovery workflows
 
-```mermaid
-flowchart TD
-    user[User or CI] --> entry[scripts/install-codex-ubuntu.sh]
-    user --> orchestrator[codex.sh]
-    orchestrator --> validator[scripts/validate-environment.sh]
-    orchestrator --> doctor[scripts/doctor.sh]
-    orchestrator --> entry
-    entry --> runtime[scripts/lib/runtime.sh]
-    runtime --> installer[scripts/lib/installer.sh]
-    installer --> platform[platform capabilities]
-    installer --> security[security primitives]
-    installer --> packages[packages and Node.js]
-    installer --> codex[Codex CLI setup]
-    installer --> shell[Shell integration]
-    installer --> manifest[State and manifest output]
+Run doctor mode first when a host is already modified or partially configured:
+
+```bash
+bash scripts/doctor.sh
+bash scripts/doctor.sh --offline
+bash scripts/doctor.sh --repair
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> VALIDATE
-    VALIDATE --> DOWNLOAD
-    DOWNLOAD --> VERIFY
-    VERIFY --> INSTALL
-    INSTALL --> CONFIGURE
-    CONFIGURE --> VERIFY_RUNTIME
-    VERIFY_RUNTIME --> COMPLETE
-    VALIDATE --> FAILED
-    DOWNLOAD --> FAILED
-    VERIFY --> FAILED
-    INSTALL --> FAILED
-    CONFIGURE --> FAILED
-    VERIFY_RUNTIME --> FAILED
+Repair mode can recreate missing Codex configuration, restrict config permissions, and reapply idempotent shell integration without installing packages. For interrupted installs, inspect `${HOME}/.local/share/zcodex/state`, the manifest, and backups under `${HOME}/.zcodex/backups/` before retrying.
+
+Generate a deterministic diagnostics bundle when a failure needs review:
+
+```bash
+bash scripts/diagnostics.sh
 ```
 
-Repository layout:
+## CI/CD overview
 
-```text
-zcodex/
-├── .github/workflows/       # CI, security, formatting, release workflows
-├── docs/                    # Architecture, release, audit, troubleshooting, branding
-├── scripts/                 # Installer, doctor, release, validation entry points
-│   └── lib/                 # Shared Bash runtime libraries
-├── tests/                   # Bats and shellcheck test entry points
-├── CHANGELOG.md             # User-facing release history
-├── CONTRIBUTING.md          # Contribution and validation guide
-├── LICENSE                  # MIT license terms
-├── ROADMAP.md               # Maintainer roadmap and non-goals
-└── SECURITY.md              # Private vulnerability reporting policy
-```
+The CI system is intentionally close to local commands. `make validate` runs environment checks, ShellCheck, shfmt diff checks, workflow policy checks, Bats tests, and E2E dry-run plans.
 
-Deeper architecture notes are available in [`docs/architecture.md`](docs/architecture.md), [`docs/runtime.md`](docs/runtime.md), [`docs/capabilities.md`](docs/capabilities.md), [`docs/manifest-state.md`](docs/manifest-state.md), and [`docs/infrastructure-hardening.md`](docs/infrastructure-hardening.md).
+GitHub Actions responsibilities:
 
-## Security model
-
-`zcodex` does not use `curl | bash` installation patterns. Security-sensitive behavior is centralized in dedicated helpers and documented for review.
-
-The installer uses:
-
-- HTTPS-only download helpers with strict curl flags.
-- Optional SHA-256 verification for direct downloads and checksum manifests.
-- `mktemp -d` workspaces with trap-based cleanup.
-- `flock` protection against concurrent installer runs.
-- Timestamped rollback backups under `${HOME}/.zcodex/backups/`.
-- Private state and manifest directories under `${HOME}/.local/share/zcodex/`.
-- Minimal Codex config generation without storing secrets.
-
-Report vulnerabilities privately using [`SECURITY.md`](SECURITY.md).
-
-## Installer config
-
-A valid example installer configuration is available at [`config/zcodex/config.toml`](config/zcodex/config.toml). Copy it to `${HOME}/.config/zcodex/config.toml` when you want a local, operator-editable config file. Shell snippets or custom orchestration notes must remain inside TOML strings, such as `[custom_instructions].shell`; appending raw shell after the TOML document makes the config invalid.
-
-## Codex config
-
-The generated Codex config intentionally stays minimal:
-
-```toml
-model = "codex-1"
-
-approval-policy = "on-request"
-sandbox-mode = "workspace-write"
-```
-
-## CI and quality gates
-
-The repository exposes CI status through README badges and GitHub Actions workflows:
-
-| Workflow | Purpose |
+| Workflow | Responsibility |
 | --- | --- |
-| `ci` | Bash syntax, ShellCheck, shfmt, Bats, workflow policy, E2E plan validation, release reproducibility, and security audit jobs. |
-| `e2e` | Containerized Ubuntu 22.04/24.04 validation across amd64 and arm64 scenarios. |
-| `release-validate` | VERSION, tag, changelog, orchestrator dry-run, and deterministic artifact validation. |
-| `release` | Tag-only deterministic archive build, reproducibility gate, checksum verification, artifact upload, and GitHub Release publication. |
+| `ci` | Linting, formatting, unit tests, workflow policy, dry-run E2E, security checks, and release reproducibility checks. |
+| `e2e` | Containerized Ubuntu scenario validation for supported OS and architecture combinations. |
+| `release-validate` | VERSION, tag, changelog, orchestrator, and deterministic artifact validation. |
+| `release` | Tag-triggered release artifact build, checksum verification, and GitHub Release publication. |
 
-Local validation:
+## E2E validation overview
+
+E2E validation is driven by `scripts/e2e-runner.sh` and `tests/e2e/scenarios.tsv`. Scenarios cover fresh install, repair, manifest reconciliation, interrupted state, strict mode, CI mode, and runtime conflicts.
+
+Examples:
+
+```bash
+bash scripts/e2e-runner.sh --dry-run --ubuntu 24.04 --arch amd64
+bash scripts/e2e-runner.sh --ubuntu 22.04 --arch arm64 --scenario fresh-install
+```
+
+Container runs isolate `HOME`, `TMPDIR`, npm cache, npm prefix, XDG paths, and zcodex state. Failure logs and copied state are written below `artifacts/e2e/`.
+
+## Release verification
+
+`VERSION` is the semantic-version source of truth and must match the release tag without the leading `v`. For this release, `VERSION` is `0.3.0` and the tag contract is `v0.3.0`.
+
+Local release verification:
+
+```bash
+bash scripts/validate-release.sh v0.3.0
+bash scripts/release.sh --skip-validate
+bash scripts/verify-release-artifacts.sh dist
+make release-reproducible
+```
+
+The release archive is generated from a committed Git tree, normalized with sorted tar entries, fixed ownership, fixed mtime, UTC locale, and `gzip -n`. `SHA256SUMS` must verify before publishing.
+
+## Troubleshooting
+
+Start with a dry run and doctor check:
+
+```bash
+CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
+bash scripts/doctor.sh --offline
+```
+
+Common causes:
+
+- Unsupported OS or architecture: use Ubuntu 22.04/24.04 on amd64 or arm64.
+- Unsafe `PATH`: remove empty entries, current-directory lookup, and writable executable directories.
+- Runtime conflict: select the correct `--runtime-mode` or normalize Node.js/npm ownership.
+- Docker group not active: log out and back in after group membership changes.
+- Codex unavailable: confirm npm global bin paths and rerun doctor mode.
+
+## Development workflow
+
+Install development dependencies on Ubuntu when needed:
+
+```bash
+make deps-dev
+```
+
+Run the standard local gates:
 
 ```bash
 make lint
 make fmt-check
 make test
-make doctor
+make e2e-dry-run
 make validate
 ```
 
-Equivalent direct checks:
+Format shell files with `make fmt`. Keep generated artifacts such as `dist/`, `artifacts/`, diagnostics bundles, local logs, npm caches, and temporary state out of commits.
 
-```bash
-bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh tests/helpers/*.bash
-{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0; } | LC_ALL=C sort -z | xargs -0 shellcheck
-shfmt -d codex.sh scripts tests
-bats tests
-```
+## Contributing guide
 
-## Releases
+Contributions should keep Bash code explicit, portable within the supported Ubuntu targets, and compatible with ShellCheck and shfmt. Prefer small library functions over large entry-point edits, and update tests or fixtures when behavior changes.
 
-`zcodex` uses semantic versioning and publishes release artifacts from Git tags.
+Before opening a pull request:
 
-Release contract:
+- Run `make validate` or document any environment limitation.
+- Update `README.md`, `CHANGELOG.md`, and docs for user-visible behavior.
+- Avoid introducing `curl | bash`, unchecked downloads, broad `sudo` calls, or mutable global state.
+- Keep release artifacts generated from committed source, not from untracked build output.
 
-- `VERSION` is the version source of truth.
-- Tags use `vX.Y.Z`.
-- `CHANGELOG.md` contains a matching `## vX.Y.Z` section.
-- Release notes are extracted from the changelog.
-- Release artifacts include `zcodex-vX.Y.Z.tar.gz`, `SHA256SUMS`, and signing instructions.
+Security issues should be reported through `SECURITY.md`, not public issues.
 
-Create a release by tagging the committed tree:
+## FAQ
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+### Does zcodex install with `curl | bash`?
 
-Local release dry run:
+No. The supported path is cloning the repository, reviewing the scripts, and running local entry points.
 
-```bash
-make release
-make release-checksum
-```
+### Can I run it without Docker?
 
-See [`docs/release.md`](docs/release.md), [`docs/release-checklist.md`](docs/release-checklist.md), and [`docs/release-notes-template.md`](docs/release-notes-template.md).
+Yes. Use `--skip-docker` for installation paths that should not install or validate Docker. Some E2E workflows require Docker unless run with `--dry-run`.
 
-## Troubleshooting
+### What should I use on a workstation with nvm or asdf?
 
-Start with doctor mode:
+Activate the desired runtime and use `--runtime-mode existing-runtime`. The default clean-system path is designed for hosts where zcodex may manage apt packages.
 
-```bash
-bash scripts/doctor.sh
-```
+### How are releases made reproducible?
 
-For airgapped, proxied, or local-only validation:
+Release scripts archive the committed tree with stable sorting, ownership, mtime, locale, and gzip metadata. The release workflow verifies checksums and rebuilds the archive to compare hashes.
 
-```bash
-bash scripts/doctor.sh --offline
-bash scripts/doctor.sh --repair
-```
+### Where are runtime records stored?
 
-Common checks:
+State and manifests are stored below `${HOME}/.local/share/zcodex/` by default. Backups of managed user files are stored below `${HOME}/.zcodex/backups/`.
 
-- Confirm the host is Ubuntu 22.04 or 24.04 when using the full installer.
-- Confirm the architecture is `amd64`/`x86_64` or `arm64`/`aarch64`.
-- Confirm `sudo`, APT, `curl`, and `git` are available for install operations.
-- If Docker group membership was changed, log out and back in.
-- If `codex` is unavailable after install, confirm npm global binaries are on `PATH`.
-- Review `${HOME}/.local/share/zcodex/manifest.json` and the installer phase state under `${HOME}/.local/share/zcodex/state`.
+### Is this only for Ubuntu?
 
-Detailed troubleshooting is available in [`docs/troubleshooting.md`](docs/troubleshooting.md).
-
-## Rollback strategy
-
-Before rewriting an existing Codex config or appending to an existing shell profile, the installer copies the original file into `${HOME}/.zcodex/backups/<timestamp>/` while preserving the source path under that backup root.
-
-Restore a file by copying the saved version back to its original location, then rerun:
-
-```bash
-bash scripts/doctor.sh
-```
-
-Manifest and state design details are available in [`docs/manifest-state.md`](docs/manifest-state.md).
-
-## Open-source readiness
-
-Project governance and presentation documents:
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) for local setup, style, testing, and PR expectations.
-- [`SECURITY.md`](SECURITY.md) for private vulnerability reporting.
-- [`ROADMAP.md`](ROADMAP.md) for maintainer priorities and non-goals.
-- [`CHANGELOG.md`](CHANGELOG.md) for release history.
-- [`docs/repo-audit.md`](docs/repo-audit.md) for repository standards and DevEx audit notes.
-- [`docs/github-presentation.md`](docs/github-presentation.md) for topics, description, social preview, and release notes strategy.
-- [`assets/social-preview.svg`](assets/social-preview.svg) as the source artwork for the GitHub social preview.
-
-## License verification
-
-`zcodex` is released under the MIT License. Verify the license before redistributing or packaging:
-
-```bash
-test -f LICENSE
-sed -n '1,25p' LICENSE
-```
-
-The root [`LICENSE`](LICENSE) file is the canonical license text.
+Production support targets Ubuntu 22.04 and 24.04 on amd64 and arm64. Other environments may pass capability checks, but they are best-effort and should be validated with dry-run and doctor mode first.

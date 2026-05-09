@@ -2,7 +2,7 @@
 # Copy to ~/.config/zcodex/config.toml before running the installer.
 
 [installer]
-version = "0.2.0"
+version = "0.3.0"
 channel = "stable"
 strict_mode = false
 dry_run = false

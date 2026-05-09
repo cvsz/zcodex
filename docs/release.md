@@ -22,8 +22,8 @@ sed -n '1,25p' LICENSE
 ## Release flow
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The `release` workflow then:

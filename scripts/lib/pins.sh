@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deterministic version pins for zcodex-managed runtime dependencies.
 
-: "${ZCODEX_INSTALLER_VERSION:=0.2.0}"
+: "${ZCODEX_INSTALLER_VERSION:=0.3.0}"
 : "${ZCODEX_NODEJS_VERSION:=22}"
 : "${ZCODEX_NODEJS_PACKAGE_VERSION:=}"
 : "${ZCODEX_DOCKER_PACKAGE_VERSION:=}"

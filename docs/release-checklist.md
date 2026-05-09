@@ -1,47 +1,60 @@
 # Release Checklist
 
-Use this checklist before publishing a tagged release.
+Use this checklist before publishing a tagged release. The current prepared release is `v0.3.0` with `VERSION` set to `0.3.0`.
 
-## Pre-release
+## v0.3.0 readiness
 
-- Confirm `VERSION` contains the intended semantic version without a leading `v`.
-- Confirm `CHANGELOG.md` contains a matching `## vX.Y.Z` section.
-- Run local validation:
+- [x] `README.md` rewritten with operational architecture, deterministic runtime, ownership, recovery, CI/CD, E2E, release, troubleshooting, development, contribution, and FAQ sections.
+- [x] `CHANGELOG.md` contains `## v0.3.0 - 2026-05-09`.
+- [x] `VERSION` contains `0.3.0` without a leading `v`.
+- [x] Release tag contract documented as `v0.3.0`.
+- [x] Runtime fixture coverage includes clean, stale, broken, conflicting, missing, interrupted, and path-shadowed cases.
+- [x] Release documentation includes notes and a final verification report.
+
+## Pre-release validation
+
+Run the local validation gates from a clean working tree:
 
 ```bash
 make validate
 CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
+bash scripts/validate-release.sh v0.3.0
 ```
 
-- Review `README.md`, `docs/release.md`, `SECURITY.md`, and `ROADMAP.md` for stale version or support statements.
-- Confirm no generated files, logs, secrets, or local state are staged.
+Confirm no generated files, logs, secrets, local npm caches, diagnostics bundles, or `dist/` artifacts are staged.
 
-## Build locally
+## Release artifact build
+
+Build and verify deterministic release artifacts:
 
 ```bash
-scripts/release.sh
-cd dist
-sha256sum -c SHA256SUMS
+bash scripts/release.sh
+bash scripts/verify-release-artifacts.sh dist
+make release-reproducible
 ```
 
-Review generated release notes:
+Review generated files:
 
 ```bash
 sed -n '1,200p' dist/RELEASE_NOTES.md
+cat dist/SHA256SUMS
 ```
 
 ## Publish
 
+Create and push the release tag only after validation passes:
+
 ```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-The GitHub release workflow validates the tag, runs `make validate`, builds the archive, verifies checksums, and publishes release assets.
+The tag-triggered release workflow validates the tag, reruns repository gates, builds the deterministic archive, verifies checksums, and publishes release assets.
 
-## Post-release
+## Post-release verification
 
-- Confirm the GitHub Release exists and includes `zcodex-vX.Y.Z.tar.gz`, `SHA256SUMS`, and signing instructions.
-- Confirm README badges show passing workflows on `main`.
-- Confirm the release notes are readable and match the changelog.
-- Open a follow-up issue for any deferred hardening work.
+- [ ] Confirm the GitHub Release includes `zcodex-v0.3.0.tar.gz`, `SHA256SUMS`, release notes, and signing preparation notes.
+- [ ] Confirm checksum verification succeeds after downloading release assets.
+- [ ] Confirm README workflow badges are passing on `main`.
+- [ ] Confirm docs and changelog describe the published version.
+- [ ] Open follow-up issues for deferred signing, SBOM, provenance, or platform-expansion work.

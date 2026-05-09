@@ -6,14 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## v0.3.0 - 2026-05-09
+
+### Added
+
+- Added deterministic release support with committed-tree archive generation, normalized tar metadata, stable gzip output, checksum verification, and repeated-build hash comparison.
+- Added isolated E2E execution paths that separate `HOME`, XDG directories, npm cache, npm prefix, temporary directories, and zcodex state from the host runtime.
+- Added the runtime fixture system for clean, stale, broken, conflicting, interrupted, missing, and path-shadowed runtime scenarios.
+- Added final release preparation documentation, including the v0.3.0 checklist, release notes, and verification report.
+
 ### Changed
 
 - Hardened release workflows so Docker and Node.js host binaries are advisory during dry-run validation instead of hidden runner dependencies.
 - Isolated npm cache and prefix paths in Bats, CI, and E2E execution to avoid host runtime contamination.
+- Rewrote `README.md` with operational architecture, deterministic runtime policy, runtime ownership, recovery, CI/CD, E2E, release, troubleshooting, development, contribution, and FAQ guidance.
 
-### Added
+### Security
 
-- Added the `conflicting-runtime` fixture alias and fixture-matrix tests for release-hardening runtime scenarios.
+- Strengthened runtime ownership validation, PATH safety checks, privileged command boundaries, and release checksum gates before publication.
+- Documented release reproducibility expectations so published archives can be rebuilt and compared from the same Git tree.
 
 ## v0.2.0 - 2026-05-08
 
