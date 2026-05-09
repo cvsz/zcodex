@@ -1,5 +1,0 @@
-Refactor toward production-grade architecture by identifying god modules, cycles, coupling, unstable abstractions, brittle tests, duplication, missing interfaces, side-effect-heavy modules.
-Add characterization tests first; preserve behavior; split modules; isolate side effects; enforce typed boundaries and explicit errors.
-Write:
-- .codex/architecture/refactor-plan.md
-- .codex/architecture/module-graph.md

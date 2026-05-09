@@ -1,5 +1,0 @@
-Run recursive scan->fix->retest->rescan loop until 3 consecutive clean scans.
-After each fix rerun affected tests/lint/types/security and search for similar patterns globally.
-Record root cause, patch, regression test, risk and side-effects.
-Prioritize: exploitable security, corruption, crashes, CI failures, concurrency, leaks, logic, performance, maintainability.
-Write: .codex/findings/recursive-findings.jsonl

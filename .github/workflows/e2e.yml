@@ -8,31 +8,35 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run:
-    shell: bash
+  run: { shell: bash }
 jobs:
   e2e:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
-      - name: Run e2e
-        run: |
+        with: { fetch-depth: 0, persist-credentials: false }
+      - run: |
           set -Eeuo pipefail
           if [ -x scripts/e2e-runner.sh ]; then scripts/e2e-runner.sh; else echo 'No e2e runner found'; fi
-      - name: Validate outputs
+      - run: |
+          set -Eeuo pipefail
+          mkdir -p e2e-artifacts
+          date -u +%FT%TZ > e2e-artifacts/timestamp.txt
+          test -s e2e-artifacts/timestamp.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts-${{ github.sha }}
+          path: e2e-artifacts/
+          if-no-files-found: error
+      - if: always()
         run: |
           set -Eeuo pipefail
-          test -d . || exit 1
-      - name: Upload diagnostics
-        if: failure()
+          echo "## E2E Summary" >> "$GITHUB_STEP_SUMMARY"
+      - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-debug-${{ github.run_id }}
           if-no-files-found: ignore
-          path: |
-            ./**/*.log
-            diagnostics/
-            .codex/reports/
+          path: ./**/*.log

@@ -1,5 +1,5 @@
 name: container-scan
-on: {push: {}, pull_request: {}}
+on: { push: {}, pull_request: {} }
 permissions:
   contents: read
   security-events: write
@@ -7,7 +7,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run: {shell: bash}
+  run: { shell: bash }
 jobs:
   trivy:
     if: github.actor != 'github-actions[bot]'
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
+        with: { fetch-depth: 0, persist-credentials: false }
       - run: |
           set -Eeuo pipefail
           docker build --pull --no-cache -t zcodex:test .
@@ -25,4 +25,7 @@ jobs:
           format: sarif
           output: trivy.sarif
       - uses: github/codeql-action/upload-sarif@v3
-        with: {sarif_file: trivy.sarif}
+        with: { sarif_file: trivy.sarif }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: container-scan-debug-${{ github.run_id }}, path: trivy.sarif, if-no-files-found: ignore }

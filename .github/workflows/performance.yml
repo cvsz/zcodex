@@ -1,12 +1,12 @@
 name: performance
-on: {workflow_dispatch: {}}
+on: { workflow_dispatch: {} }
 permissions:
   contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run: {shell: bash}
+  run: { shell: bash }
 jobs:
   benchmark:
     if: github.actor != 'github-actions[bot]'
@@ -14,7 +14,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
+        with: { fetch-depth: 0, persist-credentials: false }
       - run: |
           set -Eeuo pipefail
-          echo 'benchmarking deterministic run'
+          mkdir -p perf
+          echo 'benchmarking deterministic run' | tee perf/output.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: perf-${{ github.sha }}, path: perf/, if-no-files-found: error }

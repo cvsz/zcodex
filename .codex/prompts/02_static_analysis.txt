@@ -1,7 +1,0 @@
-Perform maximum-depth static analysis recursively across all files.
-Detect syntax/type/null/panic/dead code/race/resource leaks, insecure randomness/crypto, secrets, injection/SSRF/path traversal/deserialization/file write/shell/SQL/XSS/CSRF/auth bypass/priv-esc/temp-file/permissions/defaults.
-Cross-reference duplicates, recurring anti-patterns, copy-paste bugs.
-Output with severity/exploitability/affected files/functions/root cause:
-- .codex/security/static-analysis.json
-- .codex/security/high-risk-findings.md
-- .codex/findings/static-findings.jsonl

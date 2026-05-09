@@ -1,0 +1,4 @@
+model = "gpt-5-codex"
+
+approval-policy = "on-request"
+sandbox-mode = "workspace-write"

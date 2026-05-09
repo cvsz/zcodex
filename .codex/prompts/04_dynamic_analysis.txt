@@ -1,7 +1,0 @@
-Run dynamic analysis: tests/integration/e2e/fuzzing/stress/failure simulation (network, disk, latency, partial writes, corrupted data, invalid UTF-8, timezone, permissions).
-Detect crashes/panics/hangs/deadlocks/races/leaks/retry storms/starvation/loops/exhaustion/corruption.
-For each crash: isolate reproducer, root cause, patch, regression test, revalidate.
-Write:
-- .codex/fuzzing/crashes/
-- .codex/fuzzing/reproducers/
-- .codex/reports/runtime-failures.md
