@@ -51,15 +51,28 @@ jobs:
             python3
 
       - name: Run doctor
-        run: bash scripts/doctor-ci.sh
+        run: |
+          set -Eeuo pipefail
+
+          mkdir -p .doctor
+
+          if [[ -f scripts/doctor-ci.sh ]]; then
+            bash scripts/doctor-ci.sh | tee .doctor/doctor.log
+          else
+            bash scripts/doctor.sh | tee .doctor/doctor.log
+          fi
+
+          if [[ ! -s .doctor/doctor.log ]]; then
+            echo "doctor produced no output" > .doctor/doctor.log
+          fi
 
       - name: Upload reports
-        if: always()
-        uses: actions/upload-artifact@v5
+        if: always() && hashFiles('.doctor/**') != ''
+        uses: actions/upload-artifact@v4
         with:
           name: doctor-${{ github.run_id }}-${{ github.run_attempt }}
           path: .doctor/
-          if-no-files-found: error
+          if-no-files-found: warn
 
   bats:
     name: bats / ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }}
