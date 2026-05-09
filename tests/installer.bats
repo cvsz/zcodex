@@ -40,7 +40,6 @@ SH
 	[ "$output" = "arm64" ]
 }
 
-
 @test "platform does not execute os-release content from override file" {
 	local os_release marker
 	os_release="$(zcodex_tmpfile)"
@@ -838,6 +837,24 @@ YAML
 	[[ "$output" == *"support-install:"* ]]
 	[[ "$output" == *"actions/checkout@v4"* ]]
 	[[ "$output" == *"actions/cache@"* ]]
+}
+
+@test "workflow label validator ignores templated expressions" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/.github/workflows"
+	cat >"${tmpdir}/.github/workflows/template.yml" <<'YAML'
+name: templated
+jobs:
+  test:
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - run: echo ok
+YAML
+
+	run bash -c 'cd "$1" && bash "$2"' _ "${tmpdir}" "${REPO_ROOT}/scripts/verify-workflow-labels.sh"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
 }
 
 @test "runtime context stores sorted explicit phase metadata" {
