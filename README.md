@@ -76,7 +76,7 @@ bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
 CI=true bash scripts/install-codex-ubuntu.sh --ci --skip-docker
 ```
 
-Unified orchestrator commands:
+Unified release orchestrator commands:
 
 ```bash
 ./codex.sh basic --dry-run --skip-docker
@@ -86,7 +86,17 @@ Unified orchestrator commands:
 ./codex.sh release --skip-optional
 ```
 
-The orchestrator writes a combined operational log to `codex_release.log` by default, or to `ZCODEX_RELEASE_LOG` when that environment variable is set.
+`codex.sh` is the master entry point for installer and release workflows. It validates the local environment, records each step to a combined operational log, and dispatches to the correct installer or validation path for the selected mode.
+
+| Mode | Workflow |
+| --- | --- |
+| `basic` | Runs `scripts/install-codex-ubuntu.sh` with any extra installer arguments. |
+| `full` | Runs the installer, then performs an offline doctor check. |
+| `ultimate` | Runs environment validation, the installer, and an online doctor check. |
+| `orchestrator` | Runs `scripts/doctor.sh` with any extra doctor arguments. |
+| `release` | Runs the installer and final doctor validation for release readiness. |
+
+The orchestrator checks for `bash`, warns when optional cluster or runtime tools such as `kubectl`, Docker, or Node.js are unavailable, and leaves fatal dependency decisions to the selected installer or doctor mode. It writes to `codex_release.log` by default, honors `ZCODEX_RELEASE_LOG` or `LOG_FILE` when set, and falls back to `${TMPDIR:-/tmp}/zcodex/codex_release.log` if the requested log path is not writable.
 
 ## Architecture
 
