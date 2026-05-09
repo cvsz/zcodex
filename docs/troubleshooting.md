@@ -12,7 +12,28 @@ CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-opti
 bash scripts/doctor.sh
 ```
 
-Doctor mode checks platform support, executable lookup path safety, supported interactive shells, sudo readiness for package operations, required runtime commands, optional Docker availability, network access to the Codex package registry, and installed tool versions. In airgapped or proxied environments, use offline mode to skip the outbound network probe:
+Doctor mode checks platform support, executable lookup path safety, supported interactive shells, sudo readiness for package operations, required runtime commands, optional Docker availability, network access to the Codex package registry, and installed tool versions. Doctor System v2 emits each finding as an independently traceable diagnostic with `check_id`, `severity`, `risk_score`, `message`, `context`, `recommendation`, and `auto_fixable` fields. Risk scores map to severity as follows: 0-20 `INFO`, 21-40 `LOW`, 41-60 `MEDIUM`, 61-80 `HIGH`, and 81-100 `CRITICAL`.
+
+Human mode is the default for interactive runs:
+
+```bash
+bash scripts/doctor.sh --offline --mode human
+```
+
+CI mode is selected automatically when `CI=true`, or explicitly with `--mode ci`; it emits JSON diagnostics only and avoids formatted log noise:
+
+```bash
+CI=true bash scripts/doctor.sh --offline
+bash scripts/doctor.sh --offline --mode ci
+```
+
+Debug mode includes the readable diagnostic stream plus trace context, recommendations, and the JSON form of each diagnostic:
+
+```bash
+bash scripts/doctor.sh --offline --mode debug
+```
+
+In airgapped or proxied environments, use offline mode to skip the outbound network probe:
 
 ```bash
 bash scripts/doctor.sh --offline

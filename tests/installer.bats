@@ -86,8 +86,8 @@ SH
 	rm -rf "${tmpbin}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"CI mode detected; replacing PATH"* ]]
-	[[ "$output" == *"PATH=/usr/sbin:/usr/bin:/sbin:/bin"* ]]
-	[[ "$output" == *"ERROR=0 WARN=0"* ]]
+	[[ "$output" == *"PATH=/usr/sbin:/usr/bin"* ]]
+	[[ "$output" == *"ERROR=0 WARN=1"* ]]
 }
 
 @test "doctor allows user-local PATH entries in non-privileged mode" {
@@ -101,6 +101,40 @@ SH
 	[[ "$output" == *"PATH validation passed for non-privileged doctor context"* ]]
 	[[ "$output" == *"User-local PATH entries detected"* ]]
 	[[ "$output" == *"ERROR=0 WARN=1"* ]]
+}
+
+@test "doctor CI mode emits JSON diagnostics only" {
+	local output_file
+	output_file="$(zcodex_tmpfile)"
+	run env CI=true bash "${REPO_ROOT}/scripts/doctor.sh" --offline
+	printf '%s\n' "$output" >"${output_file}"
+	python3 - "${output_file}" <<'PYCHECK'
+import json
+import sys
+required = {"check_id", "severity", "risk_score", "message", "context", "recommendation", "auto_fixable"}
+severities = {"INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"}
+lines = [line for line in open(sys.argv[1], encoding="utf-8") if line.strip()]
+assert lines, "doctor produced no diagnostics"
+for line in lines:
+    diagnostic = json.loads(line)
+    assert required <= diagnostic.keys(), diagnostic
+    assert diagnostic["severity"] in severities, diagnostic
+    assert isinstance(diagnostic["risk_score"], int), diagnostic
+    assert 0 <= diagnostic["risk_score"] <= 100, diagnostic
+    assert isinstance(diagnostic["auto_fixable"], bool), diagnostic
+PYCHECK
+	rm -f "${output_file}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'"check_id":"doctor.summary"'* ]]
+	[[ "$output" != *'[WARN]'* ]]
+	[[ "$output" != *'Summary:'* ]]
+}
+
+@test "doctor debug mode includes trace context and structured JSON" {
+	run bash "${REPO_ROOT}/scripts/doctor.sh" --mode debug --offline
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"context="* ]]
+	[[ "$output" == *'"check_id":"doctor.network.offline"'* ]]
 }
 
 @test "strict PATH validation rejects user local bin but warns for dotnet" {
