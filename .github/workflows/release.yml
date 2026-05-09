@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: doctor-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -23,6 +23,29 @@ defaults:
     shell: bash
 
 jobs:
+  doctor:
+    name: Doctor v2 CI observability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Doctor v2 tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3
+      - name: Run Doctor v2
+        run: scripts/doctor-ci.sh
+      - name: Upload Doctor v2 reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: doctor-v2-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .doctor/
+          if-no-files-found: error
+
   release:
     name: Publish tagged release
     runs-on: ubuntu-24.04

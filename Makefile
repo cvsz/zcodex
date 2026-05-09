@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor diagnostics validate ci-local release release-checksum release-verify release-reproducible
+.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor doctor-ci diagnostics validate ci-local release release-checksum release-verify release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -39,6 +39,9 @@ e2e-dry-run:
 
 doctor:
 	bash scripts/doctor.sh
+
+doctor-ci:
+	bash scripts/doctor-ci.sh
 
 diagnostics:
 	bash scripts/diagnostics.sh
