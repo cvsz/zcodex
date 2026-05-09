@@ -338,8 +338,15 @@ doctor_user_writable_path_entries() {
 		fi
 	done < <(security_path_split "${path_value}")
 
-	local IFS=', '
-	printf '%s\n' "${entries[*]}"
+	local joined=""
+	local item
+	for item in "${entries[@]}"; do
+		if [[ -n "${joined}" ]]; then
+			joined+=", "
+		fi
+		joined+="${item}"
+	done
+	printf '%s\n' "${joined}"
 }
 
 check_path() {
