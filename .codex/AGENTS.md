@@ -78,7 +78,7 @@ Codex agents must infer their operating mode from context and behave accordingly
 
 ## 4. CODEBASE MAP — WHERE THINGS LIVE
 
-```
+```bash
 zcodex/
 ├── codex.sh                     ← Orchestrator entry. Mode dispatch only.
 ├── VERSION                      ← Version source of truth. Single line: X.Y.Z
@@ -188,7 +188,7 @@ make lint && make fmt-check && make test && make doctor && make validate
 ## 7. GIT WORKFLOW
 
 ### Branch naming
-```
+```bash
 feat/<short-description>     # new features
 fix/<short-description>      # bug fixes
 docs/<short-description>     # documentation only
@@ -197,7 +197,7 @@ release/vX.Y.Z               # release prep
 ```
 
 ### Commit messages (conventional commits)
-```
+```bash
 <type>(<scope>): <imperative description>
 
 [optional body explaining WHY]
