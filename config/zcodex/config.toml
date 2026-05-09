@@ -1,161 +1,310 @@
-# Example zcodex installer configuration.
-# Copy to ~/.config/zcodex/config.toml before running the installer.
+# ================================================================
+# zcodex — Installer Configuration (Codex-Max Edition)
+# Version: 0.4.0
+# Repository: https://github.com/cvsz/zcodex
+#
+# Copy to: ~/.config/zcodex/config.toml
+# Usage:   bash scripts/install-codex-ubuntu.sh
+#
+# All keys are documented. Do not remove sections — the installer
+# reads them with fail_on_unknown_state = true. Missing required
+# keys will cause a VALIDATE phase abort.
+#
+# Shell snippets MUST stay inside [custom_instructions].shell.
+# Appending raw shell after the closing ''' makes this file invalid.
+# ================================================================
 
+# ── Installer ────────────────────────────────────────────────────
 [installer]
-version = "0.3.0"
-channel = "stable"
-strict_mode = false
-dry_run = false
-repair_mode = true
-verify_checksums = true
-verify_tls = true
-lock_timeout_seconds = 30
-log_level = "info"
+version               = "0.4.0"
+channel               = "stable"        # stable | edge | nightly
+strict_mode           = true            # abort on any non-fatal warning
+dry_run               = false           # set true for safe exploration
+repair_mode           = true            # allow doctor --repair to rerun phases
+verify_checksums      = true            # SHA-256 required — never set false
+verify_tls            = true            # HTTPS-only — never set false
+lock_timeout_seconds  = 30             # flock timeout before abort
+log_level             = "info"          # debug | info | warn | error
 
+# ── Platform ─────────────────────────────────────────────────────
 [platform]
-supported = ["ubuntu-22.04", "ubuntu-24.04"]
-require_systemd = true
-require_apt = true
-allow_wsl = true
-allow_container = true
+supported           = ["ubuntu-22.04", "ubuntu-24.04"]
+architectures       = ["amd64", "arm64"]
+require_systemd     = true
+require_apt         = true
+allow_wsl           = true
+allow_container     = true
+min_disk_mb         = 2048             # abort if less than 2 GB free
+min_ram_mb          = 512              # abort if less than 512 MB RAM
+detect_ci           = true             # auto-detect CI=true environment
 
+# ── Runtime ──────────────────────────────────────────────────────
 [runtime]
-environment_mode = "developer"
-state_dir = "~/.local/share/zcodex/state"
-manifest_path = "~/.local/share/zcodex/manifest.json"
-workspace_dir = "~/.cache/zcodex"
-backup_dir = "~/.local/share/zcodex/backups"
+environment_mode  = "developer"        # developer | ci | minimal
+state_dir         = "~/.local/share/zcodex/state"
+manifest_path     = "~/.local/share/zcodex/manifest.json"
+workspace_dir     = "~/.cache/zcodex"
+backup_dir        = "~/.local/share/zcodex/backups"
+temp_base         = "/tmp"             # mktemp -d base; never world-writable
 
+# ── Runtime — Node.js ────────────────────────────────────────────
 [runtime.nodejs]
-manager = "system"
-version = "22"
-allow_nvm = false
-allow_asdf = false
+manager                = "system"      # system | nvm | asdf
+version                = "22"          # LTS: 20 | current: 22
+allow_nvm              = false
+allow_asdf             = false
 enforce_single_runtime = true
-verify_binary_path = true
+verify_binary_path     = true
+global_bin_on_path     = true          # ensure npm global bin is in PATH
 
+# ── Runtime — Docker ─────────────────────────────────────────────
 [runtime.docker]
-enabled = true
-version = "ubuntu-candidate"
-rootless = false
+enabled                = true
+version                = "ubuntu-candidate"
+rootless               = false
 install_compose_plugin = true
+add_user_to_group      = true          # add $USER to docker group post-install
+verify_after_install   = true
 
+# ── Runtime — Codex CLI ──────────────────────────────────────────
 [runtime.codex]
-version = "0.129.0"
-install_method = "npm-global"
+version              = "latest"        # pin to e.g. "0.129.0" for reproducibility
+install_method       = "npm-global"    # npm-global is the only supported method
 verify_after_install = true
+config_path          = "~/.codex/config.toml"
 
+# Generated Codex config — intentionally minimal. Do not expand.
+[runtime.codex.config]
+model           = "codex-mini-latest"
+approval_policy = "on-request"         # never | on-failure | on-request | always
+sandbox_mode    = "workspace-write"    # disable | read-only | workspace-write
+
+# ── Security ─────────────────────────────────────────────────────
 [security]
-https_only = true
-enforce_sha256 = true
-secure_temp_dirs = true
-restrict_world_writable_path = false
-require_signed_artifacts = false
-allow_untrusted_mirrors = false
+https_only                   = true    # all downloads must use HTTPS — non-negotiable
+enforce_sha256               = true    # all binaries verified before execution — non-negotiable
+secure_temp_dirs             = true    # mktemp -d + trap cleanup
+restrict_world_writable_path = true    # fail if a PATH component is world-writable
+require_signed_artifacts     = false   # set true when cosign is available
+allow_untrusted_mirrors      = false   # never allow HTTP mirrors
 
 [security.permissions]
-warn_on_world_writable_path = true
-fail_on_world_writable_path = false
+warn_on_world_writable_path  = true
+fail_on_world_writable_path  = true    # upgraded from false — stricter than base config
+warn_on_suid_binaries        = true
+warn_on_path_shadowing       = true
 
+[security.secrets]
+# Accepted env var names for credentials. Values are NEVER logged or written.
+github_token_env   = "GITHUB_TOKEN"
+openai_key_env     = "OPENAI_API_KEY"
+redact_in_logs     = true              # redact_secrets() applied to all log streams
+
+# ── Downloads ────────────────────────────────────────────────────
 [downloads]
-retry_attempts = 3
-retry_delay_seconds = 2
+retry_attempts          = 3
+retry_delay_seconds     = 2
 connect_timeout_seconds = 10
-max_time_seconds = 300
+max_time_seconds        = 300
+max_file_size_mb        = 512          # curl --max-filesize guard
+enforce_content_type    = true         # reject HTML error pages masquerading as binaries
+user_agent              = "zcodex-installer/0.4.0"
 
+# ── State Machine ────────────────────────────────────────────────
 [state_machine]
-enabled = true
-persist_state = true
-resume_interrupted = true
+enabled              = true
+persist_state        = true
+resume_interrupted   = true            # safe to re-run after a partial install
 fail_on_unknown_state = true
+rollback_on_failure  = true            # restore pre-phase state on any phase failure
 
 [state_machine.phases]
-validate = true
-download = true
-verify = true
-install = true
-configure = true
+validate       = true
+download       = true
+verify         = true
+install        = true
+configure      = true
 verify_runtime = true
-complete = true
+complete       = true
 
+# ── Doctor ───────────────────────────────────────────────────────
 [doctor]
-strict = false
-fail_on_warning = false
-show_environment = true
-show_versions = true
-show_capabilities = true
+strict             = true              # upgraded from false — treat warnings as errors in CI
+fail_on_warning    = false             # set true for release gate
+show_environment   = true
+show_versions      = true
+show_capabilities  = true
+offline_mode       = false             # set true for airgapped validation
+auto_repair        = false             # require explicit --repair flag
 
+[doctor.checks]
+node_binary        = true
+codex_binary       = true
+codex_config       = true
+manifest_valid     = true
+state_consistent   = true
+backup_dir_exists  = true
+lockfile_clean     = true             # warn if stale lockfile is present
+npm_global_on_path = true
+
+# ── Logging ──────────────────────────────────────────────────────
 [logging]
-structured = false
-timestamps = true
-colors = true
-write_file = true
-log_file = "/tmp/zcodex-install.log"
+structured     = false
+timestamps     = true
+colors         = true
+write_file     = true
+log_file       = "/tmp/zcodex-install.log"
+max_log_size_mb = 50                  # rotate if log exceeds 50 MB
+redact_secrets  = true                # always — no raw token values in log
 
+# ── CI Mode ──────────────────────────────────────────────────────
 [ci]
 noninteractive = true
-skip_prompts = true
-fail_fast = true
+skip_prompts   = true
+fail_fast      = true
+auto_skip_docker = false              # set true only if Docker is unavailable in CI
+emit_github_annotations = true       # ::error:: / ::warning:: for GitHub Actions
 
+# ── Developer Mode ───────────────────────────────────────────────
 [developer]
-allow_existing_node_runtime = false
-allow_mixed_package_managers = false
-allow_path_shadowing = false
-warn_on_runtime_conflicts = true
+allow_existing_node_runtime    = false
+allow_mixed_package_managers   = false
+allow_path_shadowing           = false
+warn_on_runtime_conflicts      = true
+show_phase_timing              = true  # log elapsed time per phase
+show_rollback_paths            = true  # log what would be restored on failure
 
+# ── Release ──────────────────────────────────────────────────────
+[release]
+version_file           = "VERSION"
+changelog_file         = "CHANGELOG.md"
+checksum_file          = "SHA256SUMS"
+artifact_prefix        = "zcodex"
+reproducible_build     = true          # deterministic archive — SOURCE_DATE_EPOCH pinned
+verify_reproducibility = true          # rebuild + diff SHA256SUMS before publish
+sign_artifacts         = false         # set true when cosign is configured
+
+# ── Custom Instructions ───────────────────────────────────────────
+# Shell snippets MUST stay inside this TOML multi-line string.
+# Appending raw shell after the closing ''' makes the config invalid.
+# ================================================================
 [custom_instructions]
-description = "Optional release orchestrator script retained as valid TOML data."
-shell = '''#!/bin/bash
-set -euo pipefail
-# ============================================================
-# Codex Master Full Meta Final Release
-# Unified installer & orchestrator for all environments
-# ============================================================
+description = "zcodex Codex-Max unified release orchestrator — embedded as valid TOML."
 
-set -e
+shell = '''
+#!/usr/bin/env bash
+# ================================================================
+# zcodex — Unified Release Orchestrator (Codex-Max Edition)
+# Embedded in config.toml [custom_instructions].shell
+# Invoke via: codex.sh {basic|full|ultimate|orchestrator|release}
+# ================================================================
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-MODE=${1:?Usage: codex.sh {basic|full|ultimate|orchestrator|release}}
-LOGFILE="${ZCODEX_RELEASE_LOG:-${TMPDIR:-/tmp}/zcodex/codex_release.log}"
+# ── Colour helpers ───────────────────────────────────────────────
+RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'
+BLU='\033[0;34m'; RST='\033[0m'
+log()  { printf "${BLU}[%s] INFO  ${RST}%s\n" "$(date +%H:%M:%S)" "$*"; }
+ok()   { printf "${GRN}[%s] OK    ${RST}%s\n" "$(date +%H:%M:%S)" "$*"; }
+warn() { printf "${YLW}[%s] WARN  ${RST}%s\n" "$(date +%H:%M:%S)" "$*"; }
+err()  { printf "${RED}[%s] ERROR ${RST}%s\n" "$(date +%H:%M:%S)" "$*" >&2; }
+
+# ── Secret redaction ─────────────────────────────────────────────
+redact_secrets() {
+  sed -E \
+    -e "s/(GITHUB_TOKEN=)[^ ]*/\1[REDACTED]/g" \
+    -e "s/(OPENAI_API_KEY=)[^ ]*/\1[REDACTED]/g" \
+    -e "s/ghp_[A-Za-z0-9]{36}/[REDACTED_GH_TOKEN]/g" \
+    -e "s/sk-[A-Za-z0-9]{48}/[REDACTED_OPENAI_KEY]/g"
+}
+exec > >(redact_secrets) 2>&1
+
+# ── Log setup ────────────────────────────────────────────────────
+LOGFILE="${ZCODEX_RELEASE_LOG:-${LOG_FILE:-${TMPDIR:-/tmp}/zcodex/codex_release.log}}"
 mkdir -p "$(dirname "${LOGFILE}")"
+exec > >(tee -a "${LOGFILE}") 2>&1
+
+# ── Non-interactive env ──────────────────────────────────────────
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 export TZ="${TZ:-Etc/UTC}"
 
-# --- Environment Validation ---
-echo "[Codex] Validating environment..." | tee -a "${LOGFILE}"
-command -v docker >/dev/null 2>&1 || echo "[Codex] Warning: Docker not found; installer will handle Docker according to selected flags." | tee -a "${LOGFILE}"
-command -v node >/dev/null 2>&1 || echo "[Codex] Warning: Node.js not found; installer can install it on supported Ubuntu hosts." | tee -a "${LOGFILE}"
-command -v kubectl >/dev/null 2>&1 || echo "[Codex] Warning: Kubernetes not found, skipping cluster orchestration." | tee -a "${LOGFILE}"
+# ── Mode argument ─────────────────────────────────────────────────
+MODE="${1:?Usage: codex.sh {basic|full|ultimate|orchestrator|release}}"
+shift || true
 
-# --- Mode Selection ---
-case "${MODE}" in
-  basic)
-    echo "[Codex] Running Basic Installation..." | tee -a "${LOGFILE}"
-    bash install.sh | tee -a "${LOGFILE}"
-    ;;
-  full)
-    echo "[Codex] Running Full-stack Installation..." | tee -a "${LOGFILE}"
-    bash install_full.sh | tee -a "${LOGFILE}"
-    ;;
-  ultimate)
-    echo "[Codex] Running Ultimate Deployment..." | tee -a "${LOGFILE}"
-    bash install_ultimate.sh | tee -a "${LOGFILE}"
-    ;;
-  orchestrator)
-    echo "[Codex] Running Master Orchestrator..." | tee -a "${LOGFILE}"
-    bash master-orchestrator.sh | tee -a "${LOGFILE}"
-    ;;
-  release)
-    echo "[Codex] Executing Final Release Workflow..." | tee -a "${LOGFILE}"
-    bash install_ultimate.sh | tee -a "${LOGFILE}"
-    bash master-orchestrator.sh | tee -a "${LOGFILE}"
-    echo "[Codex] Release build complete. Artifacts logged in ${LOGFILE}"
-    ;;
-  *)
-    echo "Usage: codex.sh {basic|full|ultimate|orchestrator|release}"
+# ── Script paths ─────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+INSTALLER="${SCRIPT_DIR}/scripts/install-codex-ubuntu.sh"
+DOCTOR="${SCRIPT_DIR}/scripts/doctor.sh"
+VALIDATOR="${SCRIPT_DIR}/scripts/validate-environment.sh"
+
+for script in "${INSTALLER}" "${DOCTOR}" "${VALIDATOR}"; do
+  if [[ ! -f "${script}" ]]; then
+    err "Required script missing: ${script}"
     exit 1
+  fi
+done
+
+# ── Environment validation ────────────────────────────────────────
+log "Validating orchestrator environment..."
+command -v bash    >/dev/null 2>&1 || { err "bash is required. Aborting."; exit 1; }
+command -v docker  >/dev/null 2>&1 || warn "Docker not found; installer will handle per selected flags."
+command -v node    >/dev/null 2>&1 || warn "Node.js not found; installer can install it on supported Ubuntu hosts."
+command -v kubectl >/dev/null 2>&1 || warn "Kubernetes not found, skipping cluster orchestration."
+ok "Environment validation passed."
+
+# ── run_step helper ───────────────────────────────────────────────
+run_step() {
+  local description="$1"; shift
+  log "${description}"
+  LOG_FILE="${LOGFILE}" "$@"
+  ok "${description} — done."
+}
+
+# ── Mode dispatch ─────────────────────────────────────────────────
+case "${MODE}" in
+
+  basic)
+    run_step "Running Basic Installation..." \
+      bash "${INSTALLER}" "$@"
     ;;
+
+  full)
+    run_step "Running Full Installation..." \
+      bash "${INSTALLER}" "$@"
+    run_step "Running Offline Doctor Validation..." \
+      bash "${DOCTOR}" --offline
+    ;;
+
+  ultimate)
+    run_step "Running Environment Validation..." \
+      bash "${VALIDATOR}"
+    run_step "Running Ultimate Installation..." \
+      bash "${INSTALLER}" "$@"
+    run_step "Running Online Doctor Validation..." \
+      bash "${DOCTOR}"
+    ;;
+
+  orchestrator)
+    run_step "Running Master Orchestrator (Doctor)..." \
+      bash "${DOCTOR}" "$@"
+    ;;
+
+  release)
+    run_step "Executing Final Release Installation..." \
+      bash "${INSTALLER}" "$@"
+    run_step "Executing Final Release Validation..." \
+      bash "${DOCTOR}"
+    log "Release build complete. Artifacts logged in ${LOGFILE}"
+    ;;
+
+  *)
+    printf 'Usage: codex.sh {basic|full|ultimate|orchestrator|release} [ARGS...]\n' >&2
+    exit 2
+    ;;
+
 esac
 
-echo "[Codex] Process finished successfully." | tee -a "${LOGFILE}"
+ok "Process finished successfully. Log: ${LOGFILE}"
 '''
