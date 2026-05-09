@@ -93,3 +93,9 @@ See `docs/release.md` and `docs/release-checklist.md` for details.
 ## Security reports
 
 Do not open public issues for vulnerabilities. Follow `SECURITY.md`.
+
+## Commit and release signing
+
+- Sign commits (`git commit -S`) for all changes merged to protected branches.
+- Sign release tags (`git tag -s`) and attach signed provenance in release workflows.
+- Enable branch protection requiring verified signatures.

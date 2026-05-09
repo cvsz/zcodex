@@ -248,3 +248,14 @@ State and manifests are stored below `${HOME}/.local/share/zcodex/` by default. 
 ### Is this only for Ubuntu?
 
 Production support targets Ubuntu 22.04 and 24.04 on amd64 and arm64. Other environments may pass capability checks, but they are best-effort and should be validated with dry-run and doctor mode first.
+
+## Security hardening
+
+See `docs/security-hardening.md` for production hardening controls, OWASP ASVS alignment, and deployment safety gates.
+
+Run local baseline checks:
+
+```bash
+./scripts/validate-environment.sh
+ZCODEX_ENVIRONMENT=ci ./scripts/security-baseline.sh
+```
