@@ -45,7 +45,7 @@ release_log_prepare() {
 	if [[ "${ZCODEX_RELEASE_LOG_FALLBACK_WARNED}" != "true" ]]; then
 		printf '[Codex] Warning: release log %s is not writable; using %s instead.\n' \
 			"${ZCODEX_RELEASE_LOG_FILE}" \
-			"${fallback_log}" >&2
+			"${fallback_log}"
 		ZCODEX_RELEASE_LOG_FALLBACK_WARNED=true
 	fi
 	ZCODEX_RELEASE_LOG_FILE="${fallback_log}"
