@@ -624,3 +624,31 @@ phase_status=running' ]
 	[[ "$output" == *$'VERIFY
 completed'* ]]
 }
+
+@test "runtime fixture injection isolates PATH and HOME" {
+	runtime_fixture_inject nodesource-node
+	run bash -c 'printf "%s\n%s\n%s\n" "${HOME}" "${TMPDIR}" "$(node --version)"'
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"${ZCODEX_TEST_WORKDIR}/home"* ]]
+	[[ "$output" == *"${ZCODEX_TEST_WORKDIR}/tmp"* ]]
+	[[ "$output" == *"v22.16.0"* ]]
+}
+
+@test "deterministic environment helper normalizes locale and timezone" {
+	run env LC_ALL=C LANG=C TZ=America/New_York bash -c '. "${0}/scripts/lib/environment.sh"; printf "%s %s %s\n" "${LC_ALL}" "${LANG}" "${TZ}"' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[ "$output" = "C.UTF-8 C.UTF-8 UTC" ]
+}
+
+@test "runtime fixtures can simulate broken npm without host npm" {
+	runtime_fixture_inject broken-npm
+	run npm --version
+	[ "$status" -eq 42 ]
+	[[ "$output" == *"corrupted prefix"* ]]
+}
+
+@test "manifest validation rejects corrupted fixture manifests" {
+	runtime_fixture_inject corrupted-manifest
+	run bash -c '. "${0}/scripts/lib/exec.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/manifest.sh"; manifest_validate_schema "${1}"' "${REPO_ROOT}" "${ZCODEX_RUNTIME_FIXTURE_DIR}/manifest.json"
+	[ "$status" -ne 0 ]
+}

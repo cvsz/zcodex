@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+printf 'v18.19.1\n'

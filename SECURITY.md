@@ -53,3 +53,7 @@ The project does not provide a sandbox for arbitrary model-generated commands, d
 
 - See [THREAT_MODEL.md](THREAT_MODEL.md) for assets, trust boundaries, and attack-surface mitigations.
 - See [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) for PATH, privilege, runtime ownership, manifest, and release security architecture.
+
+## Deterministic CI and E2E security validation
+
+Security validation is part of the primary CI workflow and the containerized E2E workflow. The test harness isolates HOME, TMPDIR, XDG directories, and PATH. Runtime behavior that depends on Node.js, npm, Codex, or `dpkg-query` should be represented as a fixture under `tests/runtime-fixtures/` rather than by relying on software preinstalled on a CI runner.

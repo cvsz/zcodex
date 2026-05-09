@@ -133,7 +133,7 @@ manifest_append_install_record() {
 	[[ -r "${manifest}" ]] || return 1
 	install -d -m 700 "$(dirname "${records_file}")"
 	digest="$(sha256sum "${manifest}" | awk '{ print $1 }')"
-	written_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	written_at="$(zcodex_utc_now 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
 	printf '{"schema_version":1,"written_at":"%s","install_id":"%s","manifest":"%s","sha256":"%s"}\n' "${written_at}" "${ZCODEX_INSTALL_ID:-unknown}" "${manifest}" "${digest}" >>"${records_file}"
 	chmod 600 "${records_file}"
 }
@@ -145,7 +145,7 @@ manifest_write() {
 	local written_at current_phase current_status install_timestamp path_digest
 
 	install -d -m 700 "$(dirname "${ZCODEX_MANIFEST_FILE}")"
-	written_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	written_at="$(zcodex_utc_now 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
 	install_timestamp="${ZCODEX_INSTALL_TIMESTAMP:-${written_at}}"
 	current_phase="$(state_current_phase 2>/dev/null || printf '%s' UNKNOWN)"
 	current_status="$(state_status 2>/dev/null || printf '%s' "${status}")"

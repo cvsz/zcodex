@@ -46,3 +46,15 @@ artifacts, and the host administrator who invokes the installer.
 - zcodex does not replace apt, npm, nvm, or asdf.
 - zcodex does not promise rollback for arbitrary system packages installed by apt.
 - zcodex does not install unsigned third-party package repositories by default.
+
+## Fixture-mode adversarial scenarios
+
+The test fixture system models adversarial or unsafe local runtime conditions without mutating the host:
+
+- `broken-npm` simulates a corrupt npm prefix.
+- `corrupted-manifest` simulates malformed manifest input.
+- `interrupted-install` simulates resumable phase state.
+- `stale-runtime` simulates an obsolete Codex binary and stale manifest.
+- `path-shadowing` simulates a malicious binary ahead of trusted system paths.
+
+These scenarios defend against environment contamination, PATH shadowing, runtime ownership confusion, and manifest/state recovery regressions.

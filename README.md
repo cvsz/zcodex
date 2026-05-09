@@ -1,9 +1,8 @@
 # zcodex
 
-[![installer-ci](https://github.com/cvsz/zcodex/actions/workflows/installer-ci.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/installer-ci.yml)
-[![shellcheck](https://github.com/cvsz/zcodex/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/shellcheck.yml)
-[![format](https://github.com/cvsz/zcodex/actions/workflows/format.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/format.yml)
-[![security](https://github.com/cvsz/zcodex/actions/workflows/security.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/security.yml)
+[![ci](https://github.com/cvsz/zcodex/actions/workflows/ci.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/ci.yml)
+[![e2e](https://github.com/cvsz/zcodex/actions/workflows/e2e.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/e2e.yml)
+[![release-validate](https://github.com/cvsz/zcodex/actions/workflows/release-validate.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/release-validate.yml)
 [![release](https://github.com/cvsz/zcodex/actions/workflows/release.yml/badge.svg)](https://github.com/cvsz/zcodex/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -40,6 +39,12 @@ Run health checks after installation:
 
 ```bash
 bash scripts/doctor.sh
+```
+
+Validate the deterministic E2E scenario plan without Docker:
+
+```bash
+bash scripts/e2e-runner.sh --dry-run --ubuntu 24.04 --arch amd64
 ```
 
 ## Supported platforms
@@ -135,7 +140,7 @@ zcodex/
 └── SECURITY.md              # Private vulnerability reporting policy
 ```
 
-Deeper architecture notes are available in [`docs/architecture.md`](docs/architecture.md), [`docs/runtime.md`](docs/runtime.md), [`docs/capabilities.md`](docs/capabilities.md), and [`docs/manifest-state.md`](docs/manifest-state.md).
+Deeper architecture notes are available in [`docs/architecture.md`](docs/architecture.md), [`docs/runtime.md`](docs/runtime.md), [`docs/capabilities.md`](docs/capabilities.md), [`docs/manifest-state.md`](docs/manifest-state.md), and [`docs/infrastructure-hardening.md`](docs/infrastructure-hardening.md).
 
 ## Security model
 
@@ -174,11 +179,10 @@ The repository exposes CI status through README badges and GitHub Actions workfl
 
 | Workflow | Purpose |
 | --- | --- |
-| `installer-ci` | Bash syntax, Bats tests, and installer dry-run validation. |
-| `shellcheck` | ShellCheck linting for scripts and tests. |
-| `format` | shfmt formatting checks. |
-| `security` | Gitleaks secret scanning and Trivy filesystem scanning. |
-| `release` | Tag validation, full validation, deterministic archive build, checksum verification, and GitHub Release publication. |
+| `ci` | Bash syntax, ShellCheck, shfmt, Bats, workflow policy, E2E plan validation, release reproducibility, and security audit jobs. |
+| `e2e` | Containerized Ubuntu 22.04/24.04 validation across amd64 and arm64 scenarios. |
+| `release-validate` | VERSION, tag, changelog, orchestrator dry-run, and deterministic artifact validation. |
+| `release` | Tag-only deterministic archive build, reproducibility gate, checksum verification, artifact upload, and GitHub Release publication. |
 
 Local validation:
 
@@ -193,8 +197,8 @@ make validate
 Equivalent direct checks:
 
 ```bash
-bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh
-{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0; } | xargs -0 shellcheck
+bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh tests/helpers/*.bash
+{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0; } | xargs -0 shellcheck
 shfmt -d codex.sh scripts tests
 bats tests
 ```

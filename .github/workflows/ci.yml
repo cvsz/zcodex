@@ -68,11 +68,27 @@ jobs:
           python3 --version
           make validate-env
       - name: Bash syntax checks
-        run: bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh
+        run: bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh tests/helpers/*.bash
+      - name: Run shellcheck
+        run: make lint
+      - name: Check shell formatting
+        run: make fmt-check
       - name: Enforce workflow dependency policy
         run: make workflow-policy
       - name: Run Bats tests
         run: make test
+      - name: Validate E2E plan
+        run: make e2e-dry-run
+      - name: Upload diagnostics on failure
+        if: failure()
+        run: scripts/diagnostics.sh
+      - name: Publish diagnostic bundle
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-${{ matrix.ubuntu }}-${{ matrix.arch }}
+          path: diagnostics/
+          if-no-files-found: ignore
   release-reproducibility:
     runs-on: ubuntu-24.04
     steps:
@@ -114,3 +130,23 @@ jobs:
         with:
           name: zcodex-release-dry-run
           path: dist/
+
+  security-audit:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
