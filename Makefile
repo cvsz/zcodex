@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor doctor-ci diagnostics validate ci-local release release-checksum release-verify release-reproducible
+.PHONY: install deps-dev validate-env lockfile-policy lint fmt fmt-check workflow-policy test e2e-dry-run doctor doctor-ci diagnostics validate ci-local release release-checksum release-verify release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -16,6 +16,9 @@ deps-dev:
 
 validate-env:
 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'
+
+lockfile-policy:
+	bash scripts/check-lockfiles.sh
 
 lint:
 	{ printf '%s\0' codex.sh reproducibility_validation.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | LC_ALL=C sort -z; } | xargs -0 shellcheck
@@ -47,7 +50,7 @@ doctor-ci:
 diagnostics:
 	bash scripts/diagnostics.sh
 
-validate: validate-env lint fmt-check workflow-policy test e2e-dry-run
+validate: validate-env lockfile-policy lint fmt-check workflow-policy test e2e-dry-run
 
 ci-local: validate
 	bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional

@@ -163,6 +163,9 @@ jobs:
             bash scripts/validate-environment.sh
           fi
 
+      - name: Enforce lockfile policy
+        run: make lockfile-policy
+
       - name: Bash syntax checks
         run: |
           set -Eeuo pipefail
