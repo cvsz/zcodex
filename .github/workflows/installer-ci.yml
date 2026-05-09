@@ -34,11 +34,15 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
-      - name: Configure isolated temp directory
+      - name: Configure isolated test workspace
         run: |
           set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/zcodex-tmp"
+          mkdir -p "${RUNNER_TEMP}/zcodex-tmp" "${RUNNER_TEMP}/zcodex-home"
           echo "TMPDIR=${RUNNER_TEMP}/zcodex-tmp" >>"${GITHUB_ENV}"
+          echo "HOME=${RUNNER_TEMP}/zcodex-home" >>"${GITHUB_ENV}"
+          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-home/.cache" >>"${GITHUB_ENV}"
+          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-home/.config" >>"${GITHUB_ENV}"
+          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-home/.local/share" >>"${GITHUB_ENV}"
       - name: Install validation tools
         # Install Bats from Ubuntu packages instead of a helper-library setup
         # action so CI does not restore unused third-party helper caches.
@@ -87,11 +91,15 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Configure isolated temp directory
+      - name: Configure isolated release workspace
         run: |
           set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/zcodex-release-tmp"
+          mkdir -p "${RUNNER_TEMP}/zcodex-release-tmp" "${RUNNER_TEMP}/zcodex-release-home"
           echo "TMPDIR=${RUNNER_TEMP}/zcodex-release-tmp" >>"${GITHUB_ENV}"
+          echo "HOME=${RUNNER_TEMP}/zcodex-release-home" >>"${GITHUB_ENV}"
+          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-release-home/.cache" >>"${GITHUB_ENV}"
+          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-release-home/.config" >>"${GITHUB_ENV}"
+          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-release-home/.local/share" >>"${GITHUB_ENV}"
       - name: Install release validation tools
         run: |
           set -euo pipefail
@@ -108,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/release.sh --output-dir dist
-          scripts/release.sh --skip-validate --output-dir dist.repro
+          scripts/build-release.sh --output-dir dist.repro
           version="$(tr -d '[:space:]' < VERSION)"
           cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
       - name: Verify checksums
