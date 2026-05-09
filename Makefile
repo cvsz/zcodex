@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lockfile-policy lint fmt fmt-check workflow-policy test e2e-dry-run doctor doctor-ci diagnostics validate ci-local release release-checksum release-verify release-reproducible
+.PHONY: install deps-dev validate-env lockfile-policy lint fmt fmt-check workflow-policy test e2e-dry-run bench-state-transitions doctor doctor-ci diagnostics validate ci-local release release-checksum release-verify release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -40,6 +40,9 @@ e2e-dry-run:
 	bash scripts/e2e-runner.sh --dry-run --ubuntu 22.04 --arch amd64
 	bash scripts/e2e-runner.sh --dry-run --ubuntu 24.04 --arch arm64
 
+
+bench-state-transitions:
+	bash tests/benchmark-state-transitions.sh
 
 doctor:
 	bash scripts/doctor.sh
