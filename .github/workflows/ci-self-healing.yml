@@ -18,12 +18,31 @@ env:
   LANG: C.UTF-8
   TZ: UTC
 
+concurrency:
+  group: doctor-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  doctor:
+    name: Doctor v2 CI observability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/doctor-ci.sh
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: doctor-v2-ci-self-healing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .doctor/
+          if-no-files-found: error
+
   self-heal:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -79,4 +98,3 @@ PY
         run: |
           set -Eeuo pipefail
           test -f tests/ci-failure-history.jsonl
-

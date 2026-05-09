@@ -7,7 +7,7 @@ on:
       - main
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: doctor-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install tooling
         run: |
@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doctor-${{ github.run_id }}-${{ github.run_attempt }}
           path: .doctor/
@@ -84,7 +84,7 @@ jobs:
             runner: ubuntu-24.04-arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure isolated workspace
         run: |
@@ -172,7 +172,7 @@ jobs:
 
       - name: Publish diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: diagnostics-${{ matrix.ubuntu }}-${{ matrix.arch }}
           path: diagnostics/
@@ -184,7 +184,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -222,7 +222,7 @@ jobs:
           scripts/verify-release-artifacts.sh dist-a
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-dry-run
           path: dist-a/
@@ -234,7 +234,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
