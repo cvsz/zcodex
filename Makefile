@@ -18,13 +18,13 @@ validate-env:
 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'
 
 lint:
-	{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | sort -z; } | xargs -0 shellcheck
+	{ printf '%s\0' codex.sh reproducibility_validation.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | LC_ALL=C sort -z; } | xargs -0 shellcheck
 
 fmt:
-	shfmt -w codex.sh scripts tests
+	shfmt -w codex.sh reproducibility_validation.sh scripts tests
 
 fmt-check:
-	shfmt -d codex.sh scripts tests
+	shfmt -d codex.sh reproducibility_validation.sh scripts tests
 
 workflow-policy:
 	python3 tests/workflow_policy.py

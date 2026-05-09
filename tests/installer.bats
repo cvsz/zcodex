@@ -625,11 +625,11 @@ JSON
 	version="$(tr -d '[:space:]' <"${REPO_ROOT}/VERSION")"
 	archive="${output_dir}/zcodex-v${version}.tar.gz"
 
-	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC SOURCE_DATE_EPOCH=0 TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${output_dir}"
+	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${output_dir}"
 	[ "$status" -eq 0 ]
 	listing="$(tar -tvf "${archive}" | sed -n '1,5p')"
 	[[ "${listing}" == *" 0/0 "* ]]
-	[[ "${listing}" == *"1970-01-01"* || "${listing}" == *"1969-12-31"* ]]
+	[[ "${listing}" == *"2025-01-01"* ]]
 }
 
 @test "workflow policy rejects Bats helpers, cache restores, and deprecated action majors" {
