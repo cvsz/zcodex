@@ -260,11 +260,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy
+      - name: Run Trivy (SARIF)
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
 
       - name: Security summary
         if: always()
@@ -272,7 +282,5 @@ jobs:
           {
             echo "## CI security audit"
             echo "- Gitleaks and Trivy executed."
-            echo "- Security findings are uploaded in job artifacts/SARIF workflows."
+            echo "- Trivy findings exported as SARIF for artifact integrity and triage."
           } >> "$GITHUB_STEP_SUMMARY"
-          severity: HIGH,CRITICAL
-          exit-code: "1"

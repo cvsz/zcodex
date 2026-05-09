@@ -65,8 +65,15 @@ jobs:
       - name: Install Doctor v2 tooling
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3
+          for attempt in 1 2 3; do
+            if sudo apt-get update -o Acquire::Retries=3 && sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3; then
+              break
+            fi
+            if [[ "${attempt}" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
       - name: Run Doctor v2
         run: scripts/doctor-ci.sh
       - name: Ensure Doctor v2 artifact payload exists
