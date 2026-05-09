@@ -137,6 +137,50 @@ PYCHECK
 	[[ "$output" == *'"check_id":"doctor.network.offline"'* ]]
 }
 
+@test "doctor JSON diagnostics include remediation suggestions" {
+	local output_file
+	output_file="$(zcodex_tmpfile)"
+	run env CI=true bash "${REPO_ROOT}/scripts/doctor.sh" --offline
+	printf '%s\n' "$output" >"${output_file}"
+	python3 - "${output_file}" <<'PYCHECK'
+import json
+import sys
+required = {"issue", "root_cause", "fix_strategy", "fix_type", "fix", "confidence", "patch_snippet"}
+fix_types = {"command", "patch", "config"}
+for line in open(sys.argv[1], encoding="utf-8"):
+    if not line.strip():
+        continue
+    diagnostic = json.loads(line)
+    assert required <= diagnostic.keys(), diagnostic
+    assert diagnostic["fix_type"] in fix_types, diagnostic
+    assert isinstance(diagnostic["fix"], str) and diagnostic["fix"], diagnostic
+    assert isinstance(diagnostic["confidence"], (int, float)), diagnostic
+    assert 0 <= diagnostic["confidence"] <= 1, diagnostic
+PYCHECK
+	rm -f "${output_file}"
+	[ "$status" -eq 0 ]
+}
+
+@test "doctor suggests install commands for missing dependencies" {
+	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; DOCTOR_OUTPUT_MODE=ci; runtime_command_exists() { return 1; }; check_command git || true' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'"check_id":"doctor.command.git.missing"'* ]]
+	[[ "$output" == *'"fix_type":"command"'* ]]
+	[[ "$output" == *'Install git: sudo apt install git'* ]]
+}
+
+@test "doctor suggests a PATH reorder patch for PATH misconfiguration" {
+	local tmpbin
+	tmpbin="$(zcodex_tmpdir)"
+	chmod 755 "${tmpbin}"
+	run env PATH="${tmpbin}::/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; DOCTOR_OUTPUT_MODE=ci; check_path || true' "${REPO_ROOT}"
+	rm -rf "${tmpbin}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'"check_id":"doctor.path.invalid"'* ]]
+	[[ "$output" == *'"fix_type":"patch"'* ]]
+	[[ "$output" == *"trusted_path="* ]]
+}
+
 @test "strict PATH validation rejects user local bin but warns for dotnet" {
 	local tmpdir
 	tmpdir="$(zcodex_tmpdir)"

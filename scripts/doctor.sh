@@ -127,16 +127,127 @@ doctor_json_bool() {
 	esac
 }
 
+doctor_path_reorder_script() {
+	cat <<'SCRIPT'
+# Review first; then source from your shell profile. Do not run with sudo.
+trusted_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+user_path="${HOME}/.local/bin:${HOME}/.npm-global/bin"
+export PATH="${trusted_path}:${user_path}"
+SCRIPT
+}
+
+doctor_ci_stability_patch() {
+	cat <<'PATCH'
+# .github/workflows/<workflow>.yml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  <job-name>:
+    timeout-minutes: 30
+PATCH
+}
+
+doctor_shell_safety_patch() {
+	cat <<'PATCH'
+# Prefer strict mode plus arrays and quoted expansions.
+set -Eeuo pipefail
+cmd=(sudo apt-get install -y bash git curl)
+"${cmd[@]}"
+PATCH
+}
+
+doctor_remediation() {
+	local check_id="$1" message="$2" context="$3" recommendation="$4" auto_fixable="$5"
+
+	DOCTOR_ROOT_CAUSE="${message}"
+	DOCTOR_FIX_STRATEGY="${recommendation}"
+	DOCTOR_FIX_TYPE="config"
+	DOCTOR_FIX="${recommendation}"
+	DOCTOR_CONFIDENCE="0.70"
+	DOCTOR_PATCH_SNIPPET=""
+
+	case "${check_id}" in
+	doctor.path.invalid | doctor.path.user-writable | doctor.path.ci-sanitized)
+		DOCTOR_ROOT_CAUSE="PATH contains unsafe ordering or entries that can shadow trusted system commands (${context})."
+		DOCTOR_FIX_STRATEGY="Reorder PATH so trusted system directories come first, then append user-local directories only for non-privileged shells."
+		DOCTOR_FIX_TYPE="patch"
+		DOCTOR_PATCH_SNIPPET="$(doctor_path_reorder_script)"
+		DOCTOR_FIX="${DOCTOR_PATCH_SNIPPET}"
+		DOCTOR_CONFIDENCE="0.90"
+		;;
+	doctor.command.*.missing | doctor.command.*.optional-missing | doctor.tooling.*.missing | doctor.network.curl-missing)
+		DOCTOR_ROOT_CAUSE="Required command is not installed or is not discoverable on PATH (${context})."
+		DOCTOR_FIX_STRATEGY="Install the missing dependency with the platform package manager; do not modify project files."
+		DOCTOR_FIX_TYPE="command"
+		DOCTOR_FIX="${recommendation}"
+		DOCTOR_CONFIDENCE="0.88"
+		;;
+	doctor.tooling.remediation)
+		DOCTOR_ROOT_CAUSE="One or more development/release tooling commands are absent from the host."
+		DOCTOR_FIX_STRATEGY="Install the repository's complete development dependency set."
+		DOCTOR_FIX_TYPE="command"
+		DOCTOR_FIX="make deps-dev"
+		DOCTOR_CONFIDENCE="0.86"
+		;;
+	doctor.ci.* | doctor.workflow.* | doctor.network.unavailable)
+		DOCTOR_ROOT_CAUSE="CI or network execution can become unstable without explicit time limits and duplicate-run cancellation (${context})."
+		DOCTOR_FIX_STRATEGY="Add bounded job timeouts and concurrency cancellation to the affected workflow; keep network checks deterministic."
+		DOCTOR_FIX_TYPE="config"
+		DOCTOR_PATCH_SNIPPET="$(doctor_ci_stability_patch)"
+		DOCTOR_FIX="${DOCTOR_PATCH_SNIPPET}"
+		DOCTOR_CONFIDENCE="0.78"
+		;;
+	doctor.ok | doctor.info | doctor.path.valid | doctor.path.privileged-validation | doctor.shell.supported | doctor.permissions.root | doctor.permissions.sudo | doctor.tooling.start | doctor.tooling.complete | doctor.network.available | doctor.platform.context | doctor.platform.ubuntu-supported | doctor.command.*)
+		DOCTOR_ROOT_CAUSE="No issue detected for this check."
+		DOCTOR_FIX_STRATEGY="No remediation required."
+		DOCTOR_FIX_TYPE="config"
+		DOCTOR_FIX="No action required."
+		DOCTOR_CONFIDENCE="1.00"
+		;;
+	doctor.shell.* | doctor.permissions.* | doctor.error | doctor.fatal)
+		DOCTOR_ROOT_CAUSE="Shell or privilege context is not safe for deterministic unattended execution (${context})."
+		DOCTOR_FIX_STRATEGY="Use strict shell mode, arrays for commands, quoted expansions, and an explicit supported shell path."
+		DOCTOR_FIX_TYPE="patch"
+		DOCTOR_PATCH_SNIPPET="$(doctor_shell_safety_patch)"
+		DOCTOR_FIX="${DOCTOR_PATCH_SNIPPET}"
+		DOCTOR_CONFIDENCE="0.76"
+		;;
+	doctor.summary)
+		DOCTOR_ROOT_CAUSE="Doctor aggregated one or more diagnostics in this run (${context})."
+		DOCTOR_FIX_STRATEGY="Resolve the preceding diagnostics using their remediation objects, then rerun doctor."
+		DOCTOR_FIX_TYPE="config"
+		DOCTOR_FIX="${DOCTOR_FIX_STRATEGY}"
+		DOCTOR_CONFIDENCE="0.80"
+		;;
+	doctor.platform.*)
+		DOCTOR_ROOT_CAUSE="Host platform does not fully match the supported zcodex runtime contract (${context})."
+		DOCTOR_FIX_STRATEGY="Move the run to a supported Ubuntu amd64/arm64 host, or keep current platform findings advisory if all required capabilities exist."
+		DOCTOR_FIX_TYPE="config"
+		DOCTOR_FIX="${DOCTOR_FIX_STRATEGY}"
+		DOCTOR_CONFIDENCE="0.74"
+		;;
+	esac
+}
+
 doctor_diagnostic_json() {
 	local check_id="$1" severity="$2" risk_score="$3" message="$4" context="$5" recommendation="$6" auto_fixable="$7"
-	printf '{"check_id":"%s","severity":"%s","risk_score":%s,"message":"%s","context":"%s","recommendation":"%s","auto_fixable":%s}\n' \
+	doctor_remediation "${check_id}" "${message}" "${context}" "${recommendation}" "${auto_fixable}"
+	printf '{"check_id":"%s","severity":"%s","risk_score":%s,"message":"%s","context":"%s","recommendation":"%s","auto_fixable":%s,"issue":"%s","root_cause":"%s","fix_strategy":"%s","fix_type":"%s","fix":"%s","confidence":%s,"patch_snippet":"%s"}\n' \
 		"$(log_json_escape "${check_id}")" \
 		"$(log_json_escape "${severity}")" \
 		"${risk_score}" \
 		"$(log_json_escape "${message}")" \
 		"$(log_json_escape "${context}")" \
 		"$(log_json_escape "${recommendation}")" \
-		"$(doctor_json_bool "${auto_fixable}")"
+		"$(doctor_json_bool "${auto_fixable}")" \
+		"$(log_json_escape "${message}")" \
+		"$(log_json_escape "${DOCTOR_ROOT_CAUSE}")" \
+		"$(log_json_escape "${DOCTOR_FIX_STRATEGY}")" \
+		"$(log_json_escape "${DOCTOR_FIX_TYPE}")" \
+		"$(log_json_escape "${DOCTOR_FIX}")" \
+		"${DOCTOR_CONFIDENCE}" \
+		"$(log_json_escape "${DOCTOR_PATCH_SNIPPET}")"
 }
 
 doctor_emit() {
@@ -152,6 +263,18 @@ doctor_emit() {
 	INFO) log_info "${check_id}: ${message}" ;;
 	LOW | MEDIUM) log_warn "${check_id}: ${message}" ;;
 	HIGH | CRITICAL) log_error "${check_id}: ${message}" ;;
+	esac
+	case "${severity}" in
+	LOW | MEDIUM | HIGH | CRITICAL)
+		doctor_remediation "${check_id}" "${message}" "${context}" "${recommendation}" "${auto_fixable}"
+		log_info "${check_id}: root_cause=${DOCTOR_ROOT_CAUSE}"
+		log_info "${check_id}: fix_type=${DOCTOR_FIX_TYPE} fix_strategy=${DOCTOR_FIX_STRATEGY} confidence=${DOCTOR_CONFIDENCE}"
+		if [[ -n "${DOCTOR_PATCH_SNIPPET}" ]]; then
+			log_info "${check_id}: patch_snippet=${DOCTOR_PATCH_SNIPPET}"
+		else
+			log_info "${check_id}: fix=${DOCTOR_FIX}"
+		fi
+		;;
 	esac
 	if doctor_is_debug; then
 		log_info "${check_id}: context=${context}"
