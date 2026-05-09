@@ -1,7 +1,5 @@
 name: supply-chain
-on:
-  push:
-  pull_request:
+on: { push: {}, pull_request: {} }
 permissions:
   contents: read
   id-token: write
@@ -10,8 +8,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run:
-    shell: bash
+  run: { shell: bash }
 jobs:
   sbom:
     if: github.actor != 'github-actions[bot]'
@@ -19,17 +16,19 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: anchore/sbom-action@v0
-        with:
-          output-file: sbom.spdx.json
+        with: { output-file: sbom.spdx.json }
       - run: |
           set -Eeuo pipefail
           test -s sbom.spdx.json
       - uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: sbom.spdx.json
+        with: { subject-path: sbom.spdx.json }
       - uses: actions/upload-artifact@v4
         with:
           name: sbom-${{ github.sha }}
           path: sbom.spdx.json
+      - if: always()
+        run: |
+          set -Eeuo pipefail
+          echo "## Supply chain summary" >> "$GITHUB_STEP_SUMMARY"

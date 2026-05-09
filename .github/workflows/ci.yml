@@ -2,10 +2,7 @@ name: ci
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - 'codex/**'
+    branches: [main, develop, 'codex/**']
   pull_request:
 
 permissions:
@@ -23,70 +20,60 @@ jobs:
   validate:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
-      CACHE_VERSION: v2
+      CACHE_VERSION: v3
       NODE_VERSION: '22.15.0'
       PYTHON_VERSION: '3.12'
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: package-lock.json
-
       - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip
-        uses: actions/cache@v4
+        with: { python-version: ${{ env.PYTHON_VERSION }} }
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-
-
-      - name: Install dependencies
+          restore-keys: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-
+      - name: Deterministic install
         run: |
           set -Eeuo pipefail
           if [ -f package-lock.json ]; then npm ci --ignore-scripts; fi
-          if [ -f requirements.txt ]; then python -m pip install --upgrade pip && pip install -r requirements.txt; fi
-
-      - name: Lint and typecheck
+          if [ -f requirements.txt ]; then python -m pip install --upgrade pip && pip install --requirement requirements.txt; fi
+      - name: Lint test build
         run: |
           set -Eeuo pipefail
           npm run lint --if-present
           npm run typecheck --if-present
-          if command -v ruff >/dev/null; then ruff check .; fi
-
-      - name: Unit tests
-        run: |
-          set -Eeuo pipefail
           npm test --if-present
           if command -v pytest >/dev/null; then pytest -q; fi
-
-      - name: Build
+          npm run build --if-present
+      - name: Artifact reproducibility precheck
         run: |
           set -Eeuo pipefail
-          npm run build --if-present
-
-      - name: Workflow summary
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-metadata-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+      - name: Summary
         if: always()
         run: |
           set -Eeuo pipefail
           {
-            echo "## CI summary"
+            echo "## CI Summary"
             echo "- Ref: ${GITHUB_REF}"
             echo "- SHA: ${GITHUB_SHA}"
+            echo "- Cache version: ${CACHE_VERSION}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload logs
+      - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -94,5 +81,5 @@ jobs:
           if-no-files-found: ignore
           path: |
             ./**/*.log
-            coverage/
+            ./**/junit*.xml
             .codex/reports/

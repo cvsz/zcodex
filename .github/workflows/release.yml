@@ -5,11 +5,13 @@ on:
     tags: ['v*']
 permissions:
   contents: write
+  attestations: write
+  id-token: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run: {shell: bash}
+  run: { shell: bash }
 jobs:
   release:
     if: github.actor != 'github-actions[bot]'
@@ -17,13 +19,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
+        with: { fetch-depth: 0, persist-credentials: false }
       - run: |
           set -Eeuo pipefail
-          [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9] ]] || { echo 'invalid tag'; exit 1; }
+          [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo 'invalid tag'; exit 1; }
           test -z "$(git status --porcelain)"
       - uses: actions/setup-node@v4
-        with: {node-version: '22.15.0', cache: npm, cache-dependency-path: package-lock.json}
+        with: { node-version: '22.15.0', cache: npm, cache-dependency-path: package-lock.json }
       - run: |
           set -Eeuo pipefail
           if [ -f package-lock.json ]; then npm ci --ignore-scripts; fi
@@ -31,7 +33,15 @@ jobs:
           mkdir -p dist
           tar --sort=name --mtime='UTC 2026-01-01' --owner=0 --group=0 --numeric-owner -czf dist/release-${GITHUB_REF_NAME}.tar.gz .
           sha256sum dist/release-${GITHUB_REF_NAME}.tar.gz | tee dist/SHA256SUMS
+          test -s dist/SHA256SUMS
+      - uses: actions/attest-build-provenance@v1
+        with: { subject-path: dist/release-${{ github.ref_name }}.tar.gz }
       - uses: actions/upload-artifact@v4
-        with:
-          name: release-${{ github.ref_name }}
-          path: dist/
+        with: { name: release-${{ github.ref_name }}, path: dist/, if-no-files-found: error }
+      - if: always()
+        run: |
+          set -Eeuo pipefail
+          echo "## Release summary" >> "$GITHUB_STEP_SUMMARY"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: release-debug-${{ github.run_id }}, path: ./**/*.log, if-no-files-found: ignore }

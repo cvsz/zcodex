@@ -10,7 +10,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run: {shell: bash}
+  run: { shell: bash }
 jobs:
   analyze:
     if: github.event.workflow_run.conclusion == 'failure' && github.actor != 'github-actions[bot]'
@@ -18,13 +18,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0, persist-credentials: false}
+        with: { fetch-depth: 0, persist-credentials: false }
       - run: |
           set -Eeuo pipefail
           mkdir -p logs
-          echo "run_id=${{ github.event.workflow_run.id }}" | tee logs/self-healing.txt
+          {
+            echo "run_id=${{ github.event.workflow_run.id }}"
+            echo "workflow=${{ github.event.workflow_run.name }}"
+            echo "conclusion=${{ github.event.workflow_run.conclusion }}"
+          } | tee logs/self-healing.txt
       - uses: actions/upload-artifact@v4
-        with:
-          name: self-healing-debug-${{ github.run_id }}
-          if-no-files-found: error
-          path: logs/
+        with: { name: self-healing-debug-${{ github.run_id }}, path: logs/, if-no-files-found: error }
