@@ -106,16 +106,45 @@ check_command() {
 	return 1
 }
 
-check_path() {
-	local canonical
 
-	if security_validate_path "${PATH:-}"; then
+doctor_user_writable_path_entries() {
+	local path_value="${1:-${PATH:-}}"
+	local entry canonical entries=()
+	while IFS= read -r entry; do
+		[[ -n "${entry}" ]] || continue
+		case "${entry}" in
+		/*) ;;
+		*) continue ;;
+		esac
+		canonical="$(security_canonical_path_entry "${entry}" 2>/dev/null || true)"
+		[[ -n "${canonical}" ]] || continue
+		if security_path_entry_is_safe_prefix "${canonical}"; then
+			continue
+		fi
+		if security_path_entry_is_writable_by_untrusted "${canonical}"; then
+			entries+=("${canonical}")
+		fi
+	done < <(security_path_split "${path_value}")
+
+	local IFS=', '
+	printf '%s\n' "${entries[*]}"
+}
+
+check_path() {
+	local canonical user_entries
+
+	if security_validate_path "${PATH:-}" safe; then
 		canonical="$(security_canonicalize_path "${PATH:-}")"
-		doctor_ok "PATH is strict and canonicalizable: ${canonical}"
+		doctor_ok "PATH validation passed for non-privileged doctor context: ${canonical}"
+		user_entries="$(doctor_user_writable_path_entries "${PATH:-}")"
+		if [[ -n "${user_entries}" ]]; then
+			doctor_warn "User-local PATH entries detected: ${user_entries}"
+		fi
+		doctor_info 'No privileged injection risk detected by doctor; installer performs strict PATH validation before privileged operations.'
 		return 0
 	fi
 
-	doctor_error 'PATH failed strict validation. Use absolute, existing, non-user-writable directories and remove empty segments.'
+	doctor_error 'PATH failed structural validation. Use absolute, existing directories and remove empty segments.'
 	return 1
 }
 

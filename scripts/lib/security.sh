@@ -13,6 +13,26 @@ security_path_split() {
 security_canonical_path_entry() {
 	local entry="$1"
 	[[ -n "${entry}" && -d "${entry}" ]] || return 1
+
+	case "${entry}" in
+	/bin)
+		if [[ -d /usr/bin ]]; then
+			printf '%s\n' /usr/bin
+			return 0
+		fi
+		;;
+	/sbin)
+		if [[ -d /usr/sbin ]]; then
+			printf '%s\n' /usr/sbin
+			return 0
+		fi
+		;;
+	esac
+
+	if command -v readlink >/dev/null 2>&1; then
+		readlink -f "${entry}" 2>/dev/null && return 0
+	fi
+
 	cd "${entry}" 2>/dev/null && pwd -P
 }
 
@@ -29,9 +49,17 @@ security_path_entry_is_writable_by_untrusted() {
 	*[2367]*) return 0 ;;
 	esac
 
-	# A user-owned PATH entry is unsafe for root-mediated execution because the
-	# user can replace binaries after validation but before a sudo command runs.
+	# User-owned PATH entries are unsafe for privileged execution because that
+	# user can replace binaries after validation but before a privileged command
+	# runs. When already running as root, any non-root-owned PATH entry is outside
+	# the trusted root/system boundary.
 	if [[ "${current_uid}" -ne 0 && "${owner_uid}" -eq "${current_uid}" ]]; then
+		case "${entry}" in
+		/usr/bin | /bin | /usr/sbin | /sbin | /usr/local/bin | /usr/local/sbin) return 1 ;;
+		*) return 0 ;;
+		esac
+	fi
+	if [[ "${current_uid}" -eq 0 && "${owner_uid}" -ne 0 ]]; then
 		case "${entry}" in
 		/usr/bin | /bin | /usr/sbin | /sbin | /usr/local/bin | /usr/local/sbin) return 1 ;;
 		*) return 0 ;;
@@ -40,8 +68,35 @@ security_path_entry_is_writable_by_untrusted() {
 	return 1
 }
 
+security_path_validation_is_strict() {
+	local mode="${1:-strict}"
+	case "${mode}" in
+	strict | privileged | install | 1 | true | TRUE | yes | YES | on | ON) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+security_path_entry_is_safe_prefix() {
+	local entry="$1"
+	case "${entry}" in
+	/usr/bin | /usr/bin/* | /usr/sbin | /usr/sbin/* | /usr/local/bin | /usr/local/bin/* | /usr/local/sbin | /usr/local/sbin/*) return 0 ;;
+	/bin | /bin/* | /sbin | /sbin/*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+security_path_entry_is_user_dotnet() {
+	local entry="$1"
+	[[ -n "${HOME:-}" ]] || return 1
+	case "${entry}" in
+	"${HOME}"/.dotnet | "${HOME}"/.dotnet/*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 security_validate_path() {
 	local path_value="${1:-${PATH:-}}"
+	local mode="${2:-strict}"
 	local entry canonical seen=":" failed=0
 
 	if [[ -z "${path_value}" ]]; then
@@ -73,7 +128,22 @@ security_validate_path() {
 			log_warn "Duplicate PATH entry after canonicalization: ${entry} -> ${canonical}"
 		fi
 		seen+="${canonical}:"
+
+		if security_path_entry_is_safe_prefix "${canonical}"; then
+			continue
+		fi
+
 		if security_path_entry_is_writable_by_untrusted "${canonical}"; then
+			if ! security_path_validation_is_strict "${mode}"; then
+				log_warn "User-writable PATH entry detected in non-privileged validation: ${canonical}"
+				continue
+			fi
+
+			if security_path_entry_is_user_dotnet "${canonical}"; then
+				log_warn "User-local .dotnet PATH entry detected during privileged validation; ensure it does not shadow system binaries: ${canonical}"
+				continue
+			fi
+
 			log_error "PATH entry is writable by an untrusted principal for privileged execution: ${canonical}"
 			failed=1
 		fi
@@ -100,7 +170,7 @@ security_canonicalize_path() {
 
 security_export_canonical_path() {
 	local canonical
-	security_validate_path "${PATH:-}" || return 1
+	security_validate_path "${PATH:-}" strict || return 1
 	canonical="$(security_canonicalize_path "${PATH:-}")"
 	[[ -n "${canonical}" ]] || return 1
 	export PATH="${canonical}"

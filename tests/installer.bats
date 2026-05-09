@@ -90,6 +90,33 @@ SH
 	[[ "$output" == *"ERROR=0 WARN=0"* ]]
 }
 
+@test "doctor allows user-local PATH entries in non-privileged mode" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
+	chmod 777 "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
+	run env HOME="${tmpdir}/home/user" PATH="${tmpdir}/home/user/.local/bin:${tmpdir}/home/user/.dotnet:/usr/bin" bash -c '. "${0}/scripts/doctor.sh"; logging_init; WARN_COUNT=0; ERROR_COUNT=0; check_path; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"PATH validation passed for non-privileged doctor context"* ]]
+	[[ "$output" == *"User-local PATH entries detected"* ]]
+	[[ "$output" == *"ERROR=0 WARN=1"* ]]
+}
+
+@test "strict PATH validation rejects user local bin but warns for dotnet" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
+	chmod 777 "${tmpdir}/home/user/.local/bin" "${tmpdir}/home/user/.dotnet"
+	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_validate_path "${HOME}/.dotnet:/usr/bin" strict' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"User-local .dotnet PATH entry detected during privileged validation"* ]]
+	run env HOME="${tmpdir}/home/user" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/security.sh"; logging_init; security_validate_path "${HOME}/.local/bin:/usr/bin" strict' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"PATH entry is writable by an untrusted principal"* ]]
+}
+
 @test "doctor treats docker as optional" {
 	run bash -c '. "${0}/scripts/doctor.sh"; logging_init; runtime_command_exists() { return 1; }; WARN_COUNT=0; ERROR_COUNT=0; check_command docker optional; printf "ERROR=%s WARN=%s\n" "${ERROR_COUNT}" "${WARN_COUNT}"' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
