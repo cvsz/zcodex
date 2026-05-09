@@ -146,7 +146,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib
 data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-assert data["installer"]["version"] == "0.2.0"
+assert data["installer"]["version"] == "0.3.0"
 assert data["runtime"]["nodejs"]["version"] == "22"
 assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 ' "${REPO_ROOT}/config/zcodex/config.toml"
@@ -321,7 +321,7 @@ SH
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'"schema_version": 2'* ]]
-	[[ "$output" == *'"installer_version": "0.2.0"'* ]]
+	[[ "$output" == *'"installer_version": "0.3.0"'* ]]
 	[[ "$output" == *'"install_state": {'* ]]
 	[[ "$output" == *'"verification_hashes": {'* ]]
 	[[ "$output" == *'"name": "codex-cli"'* ]]

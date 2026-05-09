@@ -42,7 +42,7 @@ Top-level fields required for auditing are:
 ```json
 {
   "schema_version": 1,
-  "installer_version": "0.2.0",
+  "installer_version": "0.3.0",
   "node_version": "v22.x.y",
   "docker_version": "Docker version ...",
   "codex_version": "codex ...",
