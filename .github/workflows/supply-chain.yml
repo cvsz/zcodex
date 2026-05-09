@@ -1,0 +1,79 @@
+name: supply-chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: doctor-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+  attestations: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  doctor:
+    name: Doctor v2 CI observability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Doctor v2 tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3
+      - name: Run Doctor v2
+        run: scripts/doctor-ci.sh
+      - name: Upload Doctor v2 reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: doctor-v2-supply-chain-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .doctor/
+          if-no-files-found: error
+
+  sbom-and-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate repository SBOM (SPDX JSON)
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          syft dir:. -o spdx-json=artifacts/sbom.spdx.json
+          sha256sum artifacts/sbom.spdx.json > artifacts/sbom.spdx.json.sha256
+
+      - name: Verify SBOM checksum
+        run: |
+          set -Eeuo pipefail
+          sha256sum -c artifacts/sbom.spdx.json.sha256
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: sbom-${{ github.sha }}
+          path: artifacts/sbom.spdx.json*
+          if-no-files-found: error
+
+      - name: Attest build provenance for SBOM artifact
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: artifacts/sbom.spdx.json
