@@ -4,6 +4,9 @@
 : "${ZCODEX_STATE_HOME:=${HOME}/.local/share/zcodex}"
 : "${ZCODEX_STATE_DIR:=${ZCODEX_STATE_HOME}/state}"
 : "${ZCODEX_INSTALL_ID:=}"
+: "${ZCODEX_STATE_INITIALIZED:=false}"
+: "${ZCODEX_STATE_INITIALIZED_HOME:=}"
+: "${ZCODEX_STATE_INITIALIZED_DIR:=}"
 
 state_home_default() {
 	printf '%s\n' "${ZCODEX_STATE_HOME}"
@@ -81,10 +84,20 @@ state_init() {
 	local state_dir="${2:-$(state_dir_default)}"
 	local install_id
 
+	if [[ "${ZCODEX_STATE_INITIALIZED}" == "true" \
+		&& "${ZCODEX_STATE_INITIALIZED_HOME}" == "${state_home}" \
+		&& "${ZCODEX_STATE_INITIALIZED_DIR}" == "${state_dir}" \
+		&& -n "${ZCODEX_INSTALL_ID}" ]]; then
+		return 0
+	fi
+
 	install -d -m 700 "${state_home}" "${state_dir}"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
 	ZCODEX_INSTALL_ID="${install_id}"
 	state_atomic_write "$(state_install_id_file "${state_dir}")" "${install_id}"
+	ZCODEX_STATE_INITIALIZED=true
+	ZCODEX_STATE_INITIALIZED_HOME="${state_home}"
+	ZCODEX_STATE_INITIALIZED_DIR="${state_dir}"
 }
 
 state_valid_phase() {
@@ -162,7 +175,7 @@ state_mark_in() {
 
 	now="$(state_now_utc)"
 	state_init "${state_home}" "${state_dir}"
-	install_id="$(state_read_or_create_install_id "${state_dir}")"
+	install_id="${ZCODEX_INSTALL_ID}"
 	state_atomic_write "$(state_phase_file "${state_dir}")" "${phase}"
 	state_write_status_in "${state_home}" "${state_dir}" "${status}"
 	printf '%s phase=%s status=%s install_id=%s message=%s\n' "${now}" "${phase}" "${status}" "${install_id}" "${message}" >>"$(state_history_file "${state_dir}")"
@@ -191,7 +204,7 @@ state_complete_phase_in() {
 	state_init "${state_home}" "${state_dir}"
 	install -d -m 700 "$(state_completed_dir "${state_dir}")"
 	now="$(state_now_utc)"
-	install_id="$(state_read_or_create_install_id "${state_dir}")"
+	install_id="${ZCODEX_INSTALL_ID}"
 	state_atomic_write "$(state_phase_completed_file "${phase}" "${state_dir}")" "${now}"
 	printf '%s phase=%s status=completed install_id=%s message=phase-complete\n' "${now}" "${phase}" "${install_id}" >>"$(state_history_file "${state_dir}")"
 }
