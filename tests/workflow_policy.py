@@ -18,6 +18,7 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 # Node.js 24 execution. The project tests do not load Bats helper libraries, so
 # CI should keep using the Ubuntu-packaged bats binary installed by apt.
 DISALLOWED_TOKENS = (
+    "pull_request_target",
     "bats-core/bats-action",
     "bats-install:",
     "support-install:",
@@ -40,6 +41,15 @@ DISALLOWED_TOKENS = (
     "softprops/action-gh-release@v2",
 )
 
+
+
+REQUIRED_TOP_LEVEL_PERMISSIONS = (
+    "permissions:",
+)
+
+DISALLOWED_PERMISSION_SCOPES = (
+    "write-all",
+)
 
 def workflow_files(workflow_dir: Path = WORKFLOW_DIR) -> list[Path]:
     """Return GitHub workflow YAML files regardless of extension spelling."""
@@ -87,12 +97,27 @@ def find_doctor_ci_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
     return failures
 
 
+
+def find_permission_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
+    """Require explicit least-privilege defaults and block broad write scopes."""
+    failures: list[str] = []
+    for workflow in workflow_files(workflow_dir):
+        content = workflow.read_text(encoding="utf-8")
+        rel_path = workflow_display_path(workflow)
+        if not all(token in content for token in REQUIRED_TOP_LEVEL_PERMISSIONS):
+            failures.append(f"{rel_path}: missing explicit top-level least-privilege permissions")
+        for scope in DISALLOWED_PERMISSION_SCOPES:
+            if scope in content:
+                failures.append(f"{rel_path}: disallowed broad workflow permission scope: {scope}")
+    return failures
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     workflow_dir = Path(args[0]) if args else WORKFLOW_DIR
     failures = [
         *find_policy_violations(workflow_dir),
         *find_doctor_ci_violations(workflow_dir),
+        *find_permission_violations(workflow_dir),
     ]
 
     if failures:
