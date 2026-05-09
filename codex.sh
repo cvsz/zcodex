@@ -9,6 +9,7 @@ readonly ZCODEX_RELEASE_LIB_DIR="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/lib"
 ZCODEX_RELEASE_SCRIPT_NAME="$(basename "$0")"
 readonly ZCODEX_RELEASE_SCRIPT_NAME
 ZCODEX_RELEASE_LOG_FILE="${ZCODEX_RELEASE_LOG:-${LOG_FILE:-${ZCODEX_RELEASE_SCRIPT_DIR}/codex_release.log}}"
+ZCODEX_RELEASE_LOG_FALLBACK_WARNED=false
 
 # shellcheck source=scripts/lib/exec.sh
 . "${ZCODEX_RELEASE_LIB_DIR}/exec.sh"
@@ -32,9 +33,22 @@ USAGE
 }
 
 release_log_prepare() {
-	local log_dir
+	local log_dir fallback_log fallback_dir
 	log_dir="$(dirname "${ZCODEX_RELEASE_LOG_FILE}")"
-	mkdir -p "${log_dir}"
+	if mkdir -p "${log_dir}" 2>/dev/null && : >>"${ZCODEX_RELEASE_LOG_FILE}" 2>/dev/null; then
+		return 0
+	fi
+
+	fallback_log="${TMPDIR:-/tmp}/zcodex/codex_release.log"
+	fallback_dir="$(dirname "${fallback_log}")"
+	mkdir -p "${fallback_dir}"
+	if [[ "${ZCODEX_RELEASE_LOG_FALLBACK_WARNED}" != "true" ]]; then
+		printf '[Codex] Warning: release log %s is not writable; using %s instead.\n' \
+			"${ZCODEX_RELEASE_LOG_FILE}" \
+			"${fallback_log}" >&2
+		ZCODEX_RELEASE_LOG_FALLBACK_WARNED=true
+	fi
+	ZCODEX_RELEASE_LOG_FILE="${fallback_log}"
 }
 
 log() {
