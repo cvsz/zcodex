@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
+  group: doctor-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
