@@ -1002,3 +1002,17 @@ JSON
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"FAILED"* || "$output" == *"ERROR"* ]]
 }
+
+@test "logging_init accepts explicit writable logfile" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; logging_init "${1}/installer.log"; log_info "hello"; test -s "${1}/installer.log"' "${REPO_ROOT}" "${tmpdir}"
+	[ "${status}" -eq 0 ]
+}
+
+@test "logging_init fails for missing log directory" {
+	local tmpdir
+	tmpdir="$(mktemp -d)"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; ! logging_init "${1}/missing/installer.log"' "${REPO_ROOT}" "${tmpdir}"
+	[ "${status}" -eq 0 ]
+}
