@@ -533,6 +533,21 @@ JSON
 	[ "$status" -ne 0 ]
 }
 
+@test "release tag validation accepts VERSION-derived tag" {
+	local version
+	version="$(tr -d '[:space:]' <"${REPO_ROOT}/VERSION")"
+
+	run bash "${REPO_ROOT}/scripts/validate-release-tag.sh" "v${version}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"matches VERSION ${version}"* ]]
+}
+
+@test "release tag validation rejects VERSION mismatch" {
+	run bash "${REPO_ROOT}/scripts/validate-release-tag.sh" v9.9.9
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"does not match VERSION-derived tag"* ]]
+}
+
 @test "release archive generation is byte reproducible across output directories" {
 	local first_dir second_dir version first_archive second_archive first_sha second_sha
 	first_dir="$(zcodex_tmpdir)"
