@@ -251,12 +251,11 @@ installer_run() {
 	log_section "zcodex installer"
 
 	installer_prepare_command_path
-	platform_validate
-	pins_validate
 	installer_planned_steps
 
 	if [[ "${DRY_RUN}" == "true" ]]; then
 		installer_verify_inputs
+		platform_validate
 		installer_runtime_audit_dry_run
 		log_success "Dry run completed without making changes."
 		return 0
