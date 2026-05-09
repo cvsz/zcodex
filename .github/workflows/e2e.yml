@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
       - name: Install Doctor v2 tooling
         run: |
           set -euo pipefail
@@ -41,7 +41,7 @@ jobs:
         run: scripts/doctor-ci.sh
       - name: Upload Doctor v2 reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v5
         with:
           name: doctor-v2-e2e-${{ github.run_id }}-${{ github.run_attempt }}
           path: .doctor/
@@ -65,10 +65,10 @@ jobs:
             scenario: manifest-reconciliation
           - ubuntu: '24.04'
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-24.04-arm64
             scenario: ci-mode
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
       - name: Configure isolated E2E workspace
         run: |
           set -euo pipefail
@@ -90,7 +90,7 @@ jobs:
         run: scripts/diagnostics.sh
       - name: Publish diagnostic bundle
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v5
         with:
           name: e2e-diagnostics-${{ matrix.ubuntu }}-${{ matrix.arch }}-${{ matrix.scenario }}
           path: diagnostics/
