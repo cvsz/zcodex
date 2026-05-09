@@ -3,6 +3,7 @@
 
 : "${CI_MODE:=${CI:-false}}"
 : "${LOG_FILE:=/tmp/zcodex-install.log}"
+readonly ZCODEX_LOG_ERR_INVALID_DEST=70
 
 LOG_COLOR_RED=''
 LOG_COLOR_GREEN=''
@@ -21,6 +22,27 @@ log_timestamp() {
 }
 
 logging_init() {
+	local logfile="${1:-${LOG_FILE}}"
+	local logdir
+
+	if [[ -z "${logfile}" ]]; then
+		printf 'logging_init: log file path must not be empty\n' >&2
+		return "${ZCODEX_LOG_ERR_INVALID_DEST}"
+	fi
+
+	logdir="$(dirname -- "${logfile}")"
+	if [[ ! -d "${logdir}" ]]; then
+		printf 'logging_init: log directory does not exist: %s\n' "${logdir}" >&2
+		return "${ZCODEX_LOG_ERR_INVALID_DEST}"
+	fi
+
+	touch -- "${logfile}" 2>/dev/null || {
+		printf 'logging_init: log file is not writable: %s\n' "${logfile}" >&2
+		return "${ZCODEX_LOG_ERR_INVALID_DEST}"
+	}
+
+	ZCODEX_LOG_FILE="${logfile}"
+
 	if [[ -t 2 && "${CI_MODE}" != "true" ]]; then
 		LOG_COLOR_RED=$'\033[0;31m'
 		LOG_COLOR_GREEN=$'\033[0;32m'
@@ -37,8 +59,9 @@ log_write() {
 	shift
 	local message="$*"
 	local timestamp
+	local destination="${ZCODEX_LOG_FILE:-${LOG_FILE}}"
 	timestamp="$(log_timestamp)"
-	printf '[%s] [%s] %s\n' "${timestamp}" "${level}" "${message}" >>"${LOG_FILE}"
+	printf '[%s] [%s] %s\n' "${timestamp}" "${level}" "${message}" >>"${destination}"
 	printf '%s\n' "${message}" >&2
 }
 
