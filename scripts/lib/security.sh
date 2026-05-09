@@ -94,10 +94,95 @@ security_path_entry_is_user_dotnet() {
 	esac
 }
 
-security_validate_path() {
+security_path_entry_is_user_npm_global() {
+	local entry="$1"
+	[[ -n "${HOME:-}" ]] || return 1
+	case "${entry}" in
+	"${HOME}"/.npm-global | "${HOME}"/.npm-global/*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+security_path_entry_is_user_local_safe() {
+	local entry="$1"
+	[[ -n "${HOME:-}" ]] || return 1
+	if [[ "${EUID}" -eq 0 ]]; then
+		return 1
+	fi
+	case "${entry}" in
+	"${HOME}"/.local/bin) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+security_path_entry_classification() {
+	local entry="$1"
+	case "${entry}" in
+	/usr/bin | /usr/sbin | /bin | /sbin) printf 'TRUSTED_SYSTEM\n' ;;
+	*)
+		if security_path_entry_is_user_local_safe "${entry}"; then
+			printf 'USER_LOCAL_SAFE\n'
+		elif security_path_entry_is_user_dotnet "${entry}" || security_path_entry_is_user_npm_global "${entry}" || security_path_entry_is_writable_by_untrusted "${entry}"; then
+			printf 'USER_LOCAL_RISKY\n'
+		else
+			printf 'UNKNOWN\n'
+		fi
+		;;
+	esac
+}
+
+security_path_json_escape() {
+	if declare -F log_json_escape >/dev/null 2>&1; then
+		log_json_escape "$1"
+		return 0
+	fi
+	local value="$1"
+	value="${value//\\/\\\\}"
+	value="${value//\"/\\\"}"
+	value="${value//$'\n'/\\n}"
+	value="${value//$'\r'/\\r}"
+	value="${value//$'\t'/\\t}"
+	printf '%s' "${value}"
+}
+
+security_path_analysis_json() {
+	local path="$1" classification="$2" risk_score="$3" reason="$4" action="$5"
+	printf '{"path":"%s","classification":"%s","risk_score":%s,"reason":"%s","action":"%s"}\n' \
+		"$(security_path_json_escape "${path}")" \
+		"$(security_path_json_escape "${classification}")" \
+		"${risk_score}" \
+		"$(security_path_json_escape "${reason}")" \
+		"$(security_path_json_escape "${action}")"
+}
+
+security_path_score_entry() {
+	local classification="$1" writable_executable="$2" before_system="$3"
+	local risk_score=0
+	if [[ "${classification}" != "TRUSTED_SYSTEM" ]]; then
+		risk_score=20
+	fi
+	case "${classification}" in
+	TRUSTED_SYSTEM) ;;
+	USER_LOCAL_SAFE) risk_score=$((risk_score + 10)) ;;
+	USER_LOCAL_RISKY) risk_score=$((risk_score + 30)) ;;
+	UNKNOWN) risk_score=$((risk_score + 60)) ;;
+	esac
+	if [[ "${writable_executable}" == "true" ]]; then
+		risk_score=$((risk_score + 20))
+	fi
+	if [[ "${before_system}" == "true" ]]; then
+		risk_score=$((risk_score + 15))
+	fi
+	((risk_score > 100)) && risk_score=100
+	printf '%s\n' "${risk_score}"
+}
+
+security_analyze_path() {
 	local path_value="${1:-${PATH:-}}"
 	local mode="${2:-strict}"
-	local entry canonical seen=":" failed=0
+	local emit_json="${3:-true}"
+	local entry canonical classification seen=":" failed=0 seen_system=false
+	local writable_executable before_system risk_score action reason
 
 	if [[ -z "${path_value}" ]]; then
 		log_error 'PATH is empty; refusing non-deterministic command resolution.'
@@ -129,27 +214,62 @@ security_validate_path() {
 		fi
 		seen+="${canonical}:"
 
-		if security_path_entry_is_safe_prefix "${canonical}"; then
-			continue
+		classification="$(security_path_entry_classification "${canonical}")"
+		writable_executable=false
+		if security_path_entry_is_writable_by_untrusted "${canonical}" && [[ -x "${canonical}" ]]; then
+			writable_executable=true
+		fi
+		before_system=false
+		if [[ "${seen_system}" != "true" && "${classification}" != "TRUSTED_SYSTEM" ]]; then
+			before_system=true
+		fi
+		risk_score="$(security_path_score_entry "${classification}" "${writable_executable}" "${before_system}")"
+		action=allow
+		if ((risk_score >= 85)) && security_path_validation_is_strict "${mode}"; then
+			action=block
+			failed=1
+		elif ((risk_score > 0)); then
+			action=warn
 		fi
 
-		if security_path_entry_is_writable_by_untrusted "${canonical}"; then
-			if ! security_path_validation_is_strict "${mode}"; then
-				log_warn "User-writable PATH entry detected in non-privileged validation: ${canonical}"
-				continue
-			fi
+		reason="base risk 0; classification=${classification}"
+		if [[ "${classification}" != "TRUSTED_SYSTEM" ]]; then
+			reason="base risk 20; classification=${classification}"
+		fi
+		case "${classification}" in
+		USER_LOCAL_SAFE) reason+=' (+10 user-local safe)' ;;
+		USER_LOCAL_RISKY) reason+=' (+30 user-local risky)' ;;
+		UNKNOWN) reason+=' (+60 unknown)' ;;
+		esac
+		if [[ "${writable_executable}" == "true" ]]; then
+			reason+='; writable executable directory (+20)'
+		fi
+		if [[ "${before_system}" == "true" ]]; then
+			reason+='; appears before trusted system PATH (+15)'
+		fi
+		if [[ "${action}" == "block" ]]; then
+			reason+='; strict mode blocks scores >= 85'
+		elif ((risk_score >= 85)); then
+			reason+='; strict mode disabled so downgraded to warning'
+		fi
 
-			if security_path_entry_is_user_dotnet "${canonical}"; then
-				log_warn "User-local .dotnet PATH entry detected during privileged validation; ensure it does not shadow system binaries: ${canonical}"
-				continue
-			fi
-
-			log_error "PATH entry is writable by an untrusted principal for privileged execution: ${canonical}"
-			failed=1
+		if [[ "${emit_json}" == "true" ]]; then
+			security_path_analysis_json "${canonical}" "${classification}" "${risk_score}" "${reason}" "${action}"
+		fi
+		case "${action}" in
+		block) log_error "PATH risk blocked: ${canonical} score=${risk_score} classification=${classification}. ${reason}" ;;
+		warn) log_warn "PATH risk warning: ${canonical} score=${risk_score} classification=${classification}. ${reason}" ;;
+		esac
+		if [[ "${classification}" == "TRUSTED_SYSTEM" ]]; then
+			seen_system=true
 		fi
 	done < <(security_path_split "${path_value}")
 
 	((failed == 0))
+}
+
+security_validate_path() {
+	security_analyze_path "${1:-${PATH:-}}" "${2:-strict}" false
 }
 
 security_canonicalize_path() {
