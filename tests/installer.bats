@@ -874,6 +874,16 @@ phase_status=running' ]
 completed'* ]]
 }
 
+@test "installer phase records elapsed timing metadata" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/runtime.sh"; logging_init; installer_run_phase VERIFY "timing test" bash -c "sleep 0.01"; runtime_ctx_get phase_elapsed_ms' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" =~ ^[0-9]+$ ]]
+	(( output >= 0 ))
+}
+
 @test "runtime fixture injection isolates PATH and HOME" {
 	runtime_fixture_inject nodesource-node
 	run bash -c 'printf "%s\n%s\n%s\n" "${HOME}" "${TMPDIR}" "$(node --version)"'

@@ -141,6 +141,7 @@ installer_phase_can_resume() {
 installer_run_phase() {
 	local phase="$1"
 	local message="$2"
+	local phase_started_at phase_completed_at phase_elapsed_ms
 	shift 2
 
 	if installer_phase_can_resume "${phase}" && state_phase_completed "${phase}"; then
@@ -150,12 +151,17 @@ installer_run_phase() {
 		return 0
 	fi
 
+	phase_started_at="$(date +%s%3N)"
 	runtime_ctx_set phase "${phase}"
 	runtime_ctx_set phase_message "${message}"
 	runtime_ctx_set phase_status running
 	state_mark "${phase}" "${message}" running
 	"$@"
+	phase_completed_at="$(date +%s%3N)"
+	phase_elapsed_ms="$((phase_completed_at - phase_started_at))"
+	runtime_ctx_set phase_elapsed_ms "${phase_elapsed_ms}"
 	runtime_ctx_set phase_status completed
+	log_info "Phase timing: ${phase} duration_ms=${phase_elapsed_ms}"
 	state_complete_phase "${phase}"
 	manifest_write running
 }
