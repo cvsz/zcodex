@@ -245,3 +245,88 @@ state_recovery_summary_in() {
 state_recovery_summary() {
 	state_recovery_summary_in "$(state_dir_default)"
 }
+
+state_phase_rank() {
+	case "$1" in
+	VALIDATE) printf '10\n' ;;
+	DOWNLOAD) printf '20\n' ;;
+	VERIFY) printf '30\n' ;;
+	RUNTIME_AUDIT) printf '40\n' ;;
+	INSTALL) printf '50\n' ;;
+	CONFIGURE) printf '60\n' ;;
+	VERIFY_RUNTIME) printf '70\n' ;;
+	COMPLETE) printf '80\n' ;;
+	FAILED) printf '90\n' ;;
+	*) return 1 ;;
+	esac
+}
+
+state_valid_status() {
+	case "$1" in
+	running | completed | complete | failed | repair | unknown) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+state_validate_transition() {
+	local from_phase="$1"
+	local to_phase="$2"
+	local from_rank to_rank
+	state_valid_phase "${to_phase}" || return 1
+	[[ -n "${from_phase}" ]] || return 0
+	state_valid_phase "${from_phase}" || return 1
+	case "${to_phase}" in
+	FAILED | COMPLETE) return 0 ;;
+	esac
+	from_rank="$(state_phase_rank "${from_phase}")" || return 1
+	to_rank="$(state_phase_rank "${to_phase}")" || return 1
+	((to_rank >= from_rank))
+}
+
+state_reconcile_in() {
+	local state_home="$1"
+	local state_dir="$2"
+	local phase status completed_dir marker marker_phase stale_count=0
+
+	state_init "${state_home}" "${state_dir}"
+	phase="$(state_current_phase_in "${state_dir}" 2>/dev/null || printf UNKNOWN)"
+	status="$(state_status_in "${state_dir}" 2>/dev/null || printf unknown)"
+	if ! state_valid_phase "${phase}"; then
+		log_error "Invalid persisted install phase: ${phase}"
+		state_mark_in "${state_home}" "${state_dir}" FAILED "invalid-persisted-phase=${phase}" failed
+		return 1
+	fi
+	if ! state_valid_status "${status}"; then
+		log_error "Invalid persisted install status: ${status}"
+		state_mark_in "${state_home}" "${state_dir}" FAILED "invalid-persisted-status=${status}" failed
+		return 1
+	fi
+
+	completed_dir="$(state_completed_dir "${state_dir}")"
+	if [[ -d "${completed_dir}" ]]; then
+		while IFS= read -r marker; do
+			marker_phase="$(basename "${marker}")"
+			if ! state_valid_phase "${marker_phase}"; then
+				log_warn "Removing stale phase completion marker: ${marker_phase}"
+				rm -f "${marker}"
+				stale_count=$((stale_count + 1))
+			fi
+		done < <(find "${completed_dir}" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
+	fi
+
+	if [[ "${phase}" == "COMPLETE" && "${status}" != "complete" && "${status}" != "completed" ]]; then
+		log_warn "Reconciling COMPLETE phase with stale status ${status}."
+		state_write_status_in "${state_home}" "${state_dir}" complete
+		status=complete
+	fi
+	if [[ "${phase}" != "COMPLETE" && "${status}" == "complete" ]]; then
+		log_warn "Reconciling non-COMPLETE phase ${phase} with stale complete status."
+		state_write_status_in "${state_home}" "${state_dir}" running
+		status=running
+	fi
+	printf 'phase=%s status=%s stale_markers=%s\n' "${phase}" "${status}" "${stale_count}"
+}
+
+state_reconcile() {
+	state_reconcile_in "$(state_home_default)" "$(state_dir_default)"
+}

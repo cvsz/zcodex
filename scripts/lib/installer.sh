@@ -160,7 +160,8 @@ installer_run_phase() {
 installer_prepare_recovery() {
 	if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
 		log_warn "Interrupted zcodex install detected: $(state_recovery_summary 2>/dev/null || printf 'phase=%s' "${INSTALLER_PREVIOUS_PHASE}")"
-		log_warn "Resuming with completed phase markers from ${ZCODEX_STATE_DIR}/completed.d."
+		state_reconcile >/dev/null || return 1
+		log_warn "Resuming with reconciled completed phase markers from ${ZCODEX_STATE_DIR}/completed.d."
 		return 0
 	fi
 

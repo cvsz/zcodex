@@ -58,3 +58,17 @@ The test fixture system models adversarial or unsafe local runtime conditions wi
 - `path-shadowing` simulates a malicious binary ahead of trusted system paths.
 
 These scenarios defend against environment contamination, PATH shadowing, runtime ownership confusion, and manifest/state recovery regressions.
+
+## Runtime injection and lock-race review
+
+Malicious runtime injection is modeled as PATH shadowing, conflicting Node.js/npm
+ownership, unowned npm binaries, stale manifests, and corrupted state. The
+installer treats these as trust-boundary violations rather than repairable
+package-manager drift unless the operator explicitly selects an existing-runtime
+mode and accepts any user-runtime mutation.
+
+Lock races are mitigated with a single flock-backed installer lock, atomic state
+and manifest publication through same-directory temporary files, and manifest
+validation before rename. Persisted state is never treated as authority for
+security decisions; reconciliation only decides whether a phase can be resumed or
+must be marked failed.

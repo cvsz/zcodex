@@ -110,7 +110,11 @@ jobs:
           cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
 
       - name: Verify artifact checksums
-        run: cd dist && sha256sum -c SHA256SUMS
+        run: scripts/verify-release-artifacts.sh dist
+
+      - name: Generate diagnostics on failure
+        if: failure()
+        run: scripts/diagnostics.sh
 
       - name: Upload release artifacts and logs
         uses: actions/upload-artifact@v7
@@ -118,6 +122,7 @@ jobs:
           name: release-artifacts-${{ github.ref_name }}
           path: |
             codex_release.log
+            diagnostics/
             dist/
           if-no-files-found: error
 

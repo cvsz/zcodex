@@ -80,3 +80,24 @@ Planned additions can be enabled without changing artifact names:
 - `zcodex-vX.Y.Z.spdx.json` for SBOMs.
 - Signed and protected release tags.
 - SLSA provenance once the project has a stable release identity.
+
+## Integrity gates and reproducibility checks
+
+Release artifacts are built from a git tree with normalized ownership, ordering,
+mtime, locale, timezone, and gzip headers. The release script writes
+`SHA256SUMS`, immediately verifies the checksum manifest with
+`scripts/verify-release-artifacts.sh`, and rebuilds the archive once to ensure
+the SHA-256 hash is reproducible within the same release context.
+
+Operators can run the same gate locally:
+
+```bash
+scripts/build-release.sh --output-dir dist
+scripts/verify-release-artifacts.sh dist
+make release-reproducible
+```
+
+The checksum manifest must contain exactly one deterministic `zcodex-v*.tar.gz`
+entry and each digest must be lowercase SHA-256. CI uploads dry-run release
+artifacts so failed checksum or reproducibility gates can be inspected without
+rebuilding on a developer workstation.

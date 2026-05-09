@@ -752,3 +752,47 @@ completed'* ]]
 	[ "$status" -eq 0 ]
 	[ "$output" = "" ]
 }
+
+@test "manifest migration upgrades v1 and validates integrity" {
+	local tmpdir manifest
+	tmpdir="$(zcodex_tmpdir)"
+	manifest="${tmpdir}/manifest-v1.json"
+	cat >"${manifest}" <<'JSON'
+{"schema_version":1,"install_id":"legacy","state":{"phase":"INSTALL","status":"running"},"components":{"nodejs":"22.0.0"}}
+JSON
+	run bash -c '. "${0}/scripts/lib/exec.sh"; . "${0}/scripts/lib/manifest.sh"; manifest_migrate_file "${1}"; manifest_validate_schema "${1}"; python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d[\"schema_version\"]); print(d[\"state\"][\"phase\"]); print(d[\"integrity\"][\"algorithm\"])" "${1}"' "${REPO_ROOT}" "${manifest}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'2\nINSTALL\nsha256'* ]]
+}
+
+@test "manifest validation rejects integrity tampering" {
+	local tmpdir manifest
+	tmpdir="$(zcodex_tmpdir)"
+	manifest="${tmpdir}/manifest.json"
+	run env HOME="${tmpdir}/home" ZCODEX_CONTAINER_RUNTIME=none bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/pins.sh"; . "${0}/scripts/lib/state.sh"; . "${0}/scripts/lib/manifest.sh"; logging_init; state_mark VERIFY_RUNTIME "unit test"; manifest_write running; python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d[\"state\"][\"phase\"] = \"INSTALL\"; open(p, \"w\").write(json.dumps(d, sort_keys=True, indent=2)+\"\\n\")" "${ZCODEX_MANIFEST_FILE}"; ! manifest_validate_schema "${ZCODEX_MANIFEST_FILE}"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"manifest integrity digest mismatch"* ]]
+}
+
+@test "state reconciliation removes stale completion markers" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark INSTALL "unit test" running; mkdir -p "${ZCODEX_STATE_DIR}/completed.d"; printf stale >"${ZCODEX_STATE_DIR}/completed.d/NOT_A_PHASE"; state_reconcile; test ! -e "${ZCODEX_STATE_DIR}/completed.d/NOT_A_PHASE"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"stale_markers=1"* ]]
+}
+
+@test "release artifact verifier rejects malformed checksum manifests" {
+	local tmpdir
+	tmpdir="$(zcodex_tmpdir)"
+	mkdir -p "${tmpdir}/dist"
+	printf 'artifact\n' >"${tmpdir}/dist/zcodex-v0.0.0.tar.gz"
+	printf 'bad  zcodex-v0.0.0.tar.gz\n' >"${tmpdir}/dist/SHA256SUMS"
+	run bash "${REPO_ROOT}/scripts/verify-release-artifacts.sh" "${tmpdir}/dist"
+	rm -rf "${tmpdir}"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"FAILED"* || "$output" == *"ERROR"* ]]
+}

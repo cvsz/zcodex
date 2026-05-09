@@ -209,6 +209,9 @@ build_archive() {
 		sha256sum "${archive_name}" >SHA256SUMS
 	)
 
+	log "Verifying checksum gate"
+	"${SCRIPT_DIR}/verify-release-artifacts.sh" "${OUTPUT_DIR}"
+
 	log "Extracting release notes from CHANGELOG.md"
 	extract_release_notes "${version}" "${release_notes}"
 

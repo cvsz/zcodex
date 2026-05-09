@@ -69,3 +69,16 @@ prepared but not enabled until repository key ownership is finalized.
 The runtime now normalizes `LC_ALL=C.UTF-8`, `LANG=C.UTF-8`, and `TZ=UTC` through `scripts/lib/environment.sh` before installer libraries are loaded. Security-sensitive tests inject explicit runtime fixtures from `tests/runtime-fixtures/` instead of relying on host Node.js, npm, Docker, Codex, or `dpkg-query` state. CI and E2E workflows create isolated HOME, TMPDIR, and XDG directories before invoking repository code.
 
 Failure investigation should use `scripts/diagnostics.sh`, which writes a deterministic JSON runtime snapshot and normalized tar/gzip failure bundle suitable for CI artifact upload.
+
+## 2026 hardening additions
+
+- PATH shadowing checks expose `security_detect_path_shadowing` for privileged
+  command boundaries such as `sudo`, `apt-get`, `node`, and `npm`.
+- Temporary directory creation validates that world-writable parents have sticky
+  semantics before creating private `0700` work directories.
+- Manifest v2 files are deterministically serialized and sealed with a canonical
+  SHA-256 integrity digest.
+- State reconciliation validates persisted phases/statuses and removes stale
+  completion markers instead of trusting interrupted install state blindly.
+- Release builds run a checksum verification gate immediately after writing
+  `SHA256SUMS`.
