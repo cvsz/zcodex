@@ -55,6 +55,11 @@ jobs:
           echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.cache" >>"${GITHUB_ENV}"
           echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.config" >>"${GITHUB_ENV}"
           echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.local/share" >>"${GITHUB_ENV}"
+          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.local/state" >>"${GITHUB_ENV}"
+          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-e2e-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-e2e-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-e2e-home/.npm-prefix" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-e2e-home/.npm-prefix" >>"${GITHUB_ENV}"
       - name: Run containerized E2E scenario
         run: scripts/e2e-runner.sh --ubuntu "${{ matrix.ubuntu }}" --arch "${{ matrix.arch }}" --scenario "${{ matrix.scenario }}"
       - name: Upload diagnostics on failure

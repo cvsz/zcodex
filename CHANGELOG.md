@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Changed
+
+- Hardened release workflows so Docker and Node.js host binaries are advisory during dry-run validation instead of hidden runner dependencies.
+- Isolated npm cache and prefix paths in Bats, CI, and E2E execution to avoid host runtime contamination.
+
+### Added
+
+- Added the `conflicting-runtime` fixture alias and fixture-matrix tests for release-hardening runtime scenarios.
+
 ## v0.2.0 - 2026-05-08
 
 ### Added

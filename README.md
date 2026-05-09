@@ -19,6 +19,10 @@ Codex runtime setup should be easy to inspect, safe to dry-run, and simple to re
 - Security-conscious download, checksum, tempfile, lockfile, and rollback primitives.
 - Clear CI, release, troubleshooting, and contribution paths for open-source maintenance.
 
+## Stabilization scope
+
+The current release hardening pass focuses on the failure modes that usually make bootstrap repositories unsafe to operate at scale: host PATH leakage, runner-owned Node.js/npm assumptions, mutable shared state, nondeterministic archives, malformed manifests, interrupted installs, and release workflow drift. The repository is structured so each of those concerns has an explicit script, fixture, test, workflow, or document instead of relying on undocumented runner behavior.
+
 ## Quick start
 
 Clone the repository and run the installer:
@@ -208,7 +212,7 @@ Equivalent direct checks:
 
 ```bash
 bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh tests/helpers/*.bash
-{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0; } | xargs -0 shellcheck
+{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0; } | LC_ALL=C sort -z | xargs -0 shellcheck
 shfmt -d codex.sh scripts tests
 bats tests
 ```

@@ -30,10 +30,14 @@ isolate_home() {
 	export XDG_CONFIG_HOME="${ZCODEX_TEST_WORKDIR}/xdg-config"
 	export XDG_DATA_HOME="${ZCODEX_TEST_WORKDIR}/xdg-data"
 	export XDG_STATE_HOME="${ZCODEX_TEST_WORKDIR}/xdg-state"
+	export npm_config_cache="${ZCODEX_TEST_WORKDIR}/npm-cache"
+	export NPM_CONFIG_CACHE="${npm_config_cache}"
+	export npm_config_prefix="${ZCODEX_TEST_WORKDIR}/npm-prefix"
+	export NPM_CONFIG_PREFIX="${npm_config_prefix}"
 	export ZCODEX_BACKUP_DIR="${ZCODEX_TEST_WORKDIR}/backup"
 	export ZCODEX_STATE_HOME="${ZCODEX_TEST_WORKDIR}/state-home"
 	export ZCODEX_STATE_DIR="${ZCODEX_STATE_HOME}/state"
-	mkdir -p "${HOME}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${XDG_STATE_HOME}" "${ZCODEX_STATE_DIR}"
+	mkdir -p "${HOME}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${XDG_STATE_HOME}" "${npm_config_cache}" "${npm_config_prefix}" "${ZCODEX_STATE_DIR}"
 }
 
 setup_test_environment() {
