@@ -44,6 +44,7 @@ SH
 	local os_release marker
 	os_release="$(zcodex_tmpfile)"
 	marker="$(zcodex_tmpfile)"
+	rm -f "${marker}"
 	cat >"${os_release}" <<EOF
 ID=ubuntu
 VERSION_ID="24.04"

@@ -49,6 +49,7 @@ parse_args() {
 }
 
 main() {
+	# shellcheck disable=SC2119
 	logging_init
 	parse_args "$@"
 	if command_exists npm; then

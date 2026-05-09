@@ -23,6 +23,7 @@ CI_MODE="${CI_MODE:-${CI:-false}}"
 . "${LIB_DIR}/packages.sh"
 
 main() {
+	# shellcheck disable=SC2119
 	logging_init
 	platform_validate
 	packages_update

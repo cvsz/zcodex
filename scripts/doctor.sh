@@ -617,6 +617,7 @@ print_summary() {
 main() {
 	local parse_status
 
+	# shellcheck disable=SC2119
 	logging_init
 	parse_args "$@" || {
 		parse_status="$?"

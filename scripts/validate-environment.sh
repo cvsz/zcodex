@@ -21,6 +21,7 @@ CI_MODE="${CI_MODE:-${CI:-false}}"
 . "${LIB_DIR}/security.sh"
 
 main() {
+	# shellcheck disable=SC2119
 	logging_init
 	platform_validate
 	security_analyze_path "${PATH}" relaxed false >/dev/null || true

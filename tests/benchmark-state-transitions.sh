@@ -22,6 +22,7 @@ mkdir -p "${state_home}" "${state_dir}"
 # shellcheck source=scripts/lib/state.sh
 . "${repo_root}/scripts/lib/state.sh"
 
+# shellcheck disable=SC2119
 logging_init >/dev/null 2>&1 || true
 
 benchmark_transition() {
