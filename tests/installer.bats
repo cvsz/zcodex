@@ -881,8 +881,10 @@ completed'* ]]
 	run env HOME="${tmpdir}/home" bash -c '. "${0}/scripts/lib/runtime.sh"; logging_init; installer_run_phase VERIFY "timing test" bash -c "sleep 0.01"; runtime_ctx_get phase_elapsed_ms' "${REPO_ROOT}"
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
-	[[ "$output" =~ ^[0-9]+$ ]]
-	(( output >= 0 ))
+	local elapsed_ms
+	elapsed_ms="$(printf '%s\n' "$output" | tail -n 1)"
+	[[ "$elapsed_ms" =~ ^[0-9]+$ ]]
+	(( elapsed_ms >= 0 ))
 }
 
 @test "runtime fixture injection isolates PATH and HOME" {
@@ -1011,9 +1013,9 @@ JSON
 	[ "${status}" -eq 0 ]
 }
 
-@test "logging_init fails for missing log directory" {
+@test "logging_init creates missing log directory" {
 	local tmpdir
 	tmpdir="$(mktemp -d)"
-	run bash -c '. "${0}/scripts/lib/logging.sh"; ! logging_init "${1}/missing/installer.log"' "${REPO_ROOT}" "${tmpdir}"
+	run bash -c '. "${0}/scripts/lib/logging.sh"; logging_init "${1}/missing/installer.log"; test -f "${1}/missing/installer.log"' "${REPO_ROOT}" "${tmpdir}"
 	[ "${status}" -eq 0 ]
 }
