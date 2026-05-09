@@ -28,7 +28,7 @@ codex_write_config() {
 	install -d -m 700 "${codex_home}"
 	declare -F backup_file >/dev/null && backup_file "${codex_home}/config.toml"
 	cat >"${codex_home}/config.toml" <<'CONFIG'
-model = "gpt-5-codex"
+model = "codex-1"
 
 approval-policy = "on-request"
 sandbox-mode = "workspace-write"
