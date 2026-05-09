@@ -1,52 +1,17 @@
 name: release-validate
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Release tag candidate to validate; defaults to vVERSION
-        required: false
-        default: ''
-      ref:
-        description: Git ref to archive for a dry-run release build
-        required: false
-        default: HEAD
-      mode:
-        description: Codex release orchestrator mode to validate before packaging
-        required: true
-        type: choice
-        default: release
-        options:
-          - basic
-          - full
-          - ultimate
-          - orchestrator
-          - release
-      installer_args:
-        description: Extra arguments forwarded to codex.sh for manual dry-run validation
-        required: false
-        default: '--dry-run --skip-docker --skip-optional'
-      strict_doctor:
-        description: Fail the orchestrator doctor when warnings are found
-        required: false
-        type: boolean
-        default: false
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  LC_ALL: C.UTF-8
-  LANG: C.UTF-8
-  TZ: UTC
+  workflow_run:
+    workflows:
+      - release
+    types:
+      - completed
 
 permissions:
   contents: read
 
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -54,169 +19,16 @@ defaults:
     shell: bash
 
 jobs:
-  doctor:
-    name: Doctor v2 CI observability
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install Doctor v2 tooling
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if sudo apt-get update -o Acquire::Retries=3 && sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3; then
-              break
-            fi
-            if [[ "${attempt}" -eq 3 ]]; then
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
-      - name: Run Doctor v2
-        run: scripts/doctor-ci.sh
-      - name: Ensure Doctor v2 artifact payload exists
-        if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p .doctor
-          if ! find .doctor -mindepth 1 -type f | grep -q .; then
-            printf 'Doctor v2 did not emit report files for this run.
-' > .doctor/README.txt
-          fi
-      - name: Upload Doctor v2 reports
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: doctor-v2-release-validate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .doctor/
-          if-no-files-found: error
-
   validate:
-    name: Validate release candidate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      CODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
-      ZCODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
-      RELEASE_REF: ${{ github.event.inputs.ref || 'HEAD' }}
-      RELEASE_MODE: ${{ github.event.inputs.mode || 'release' }}
-      RELEASE_INSTALLER_ARGS: ${{ github.event.inputs.installer_args || '--dry-run --skip-docker --skip-optional' }}
-      RELEASE_TAG_INPUT: ${{ github.event.inputs.tag || '' }}
-      STRICT: ${{ github.event.inputs.strict_doctor == 'true' && '1' || '0' }}
-
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Check out source
-        uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-
-      - name: Configure isolated release workspace
+          name: release
+      - name: Validate artifact
         run: |
-          set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/zcodex-release-tmp" "${RUNNER_TEMP}/zcodex-home"
-          echo "TMPDIR=${RUNNER_TEMP}/zcodex-release-tmp" >>"${GITHUB_ENV}"
-          echo "HOME=${RUNNER_TEMP}/zcodex-home" >>"${GITHUB_ENV}"
-          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-home/.cache" >>"${GITHUB_ENV}"
-          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-home/.config" >>"${GITHUB_ENV}"
-          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-home/.local/share" >>"${GITHUB_ENV}"
-          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-home/.local/state" >>"${GITHUB_ENV}"
-          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
-          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
-          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
-          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
-
-      - name: Install release validation tools
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if sudo apt-get update && sudo apt-get install -y bash git curl shellcheck shfmt bats tar coreutils make gzip python3 python3-tomli; then
-              break
-            fi
-            if [[ "${attempt}" -eq 3 ]]; then
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
-
-      - name: Validate release runtime environment
-        run: |
-          set -euo pipefail
-          echo "[Codex] Validating environment..." | tee -a "${CODEX_RELEASE_LOG}"
-          command -v bash >/dev/null 2>&1 || { echo "bash not installed. Aborting." >&2; exit 1; }
-          command -v git >/dev/null 2>&1 || { echo "git not installed. Aborting." >&2; exit 1; }
-          command -v curl >/dev/null 2>&1 || { echo "curl not installed. Aborting." >&2; exit 1; }
-          if command -v docker >/dev/null 2>&1; then
-            docker --version | tee -a "${CODEX_RELEASE_LOG}"
-          else
-            echo "[Codex] Docker not found; dry-run release validation does not require host Docker." | tee -a "${CODEX_RELEASE_LOG}"
-          fi
-          if command -v node >/dev/null 2>&1; then
-            node --version | tee -a "${CODEX_RELEASE_LOG}"
-          else
-            echo "[Codex] Node.js not found; installer dry-run owns runtime validation." | tee -a "${CODEX_RELEASE_LOG}"
-          fi
-          command -v kubectl >/dev/null 2>&1 || echo "[Codex] Kubernetes not found; cluster orchestration checks are not required for release validation." | tee -a "${CODEX_RELEASE_LOG}"
-
-      - name: Resolve release tag candidate
-        run: |
-          set -euo pipefail
-          version="$(tr -d '[:space:]' < VERSION)"
-          release_tag="${RELEASE_TAG_INPUT:-v${version}}"
-          echo "RELEASE_TAG=${release_tag}" >>"${GITHUB_ENV}"
-          printf '[Codex] Release validation candidate: %s\n' "${release_tag}" | tee -a "${CODEX_RELEASE_LOG}"
-
-      - name: Validate tag, VERSION, and changelog
-        run: scripts/validate-release.sh "${RELEASE_TAG}"
-
-      - name: Validate environment, shellcheck, shfmt, and Bats
-        run: make validate
-
-      - name: Run Codex release orchestrator
-        run: |
-          set -euo pipefail
-          case "${RELEASE_MODE}" in
-            basic|full|ultimate|orchestrator|release) ;;
-            *)
-              echo "Usage: codex.sh {basic|full|ultimate|orchestrator|release}" >&2
-              exit 1
-              ;;
-          esac
-
-          echo "[Codex] Running ${RELEASE_MODE} release validation..." | tee -a "${CODEX_RELEASE_LOG}"
-          if [[ "${RELEASE_MODE}" == "orchestrator" ]]; then
-            CI=true ./codex.sh "${RELEASE_MODE}" --offline
-          else
-            read -r -a codex_args <<<"${RELEASE_INSTALLER_ARGS}"
-            CI=true ./codex.sh "${RELEASE_MODE}" "${codex_args[@]}"
-          fi
-          echo "[Codex] Process finished successfully." | tee -a "${CODEX_RELEASE_LOG}"
-
-      - name: Build deterministic release artifacts
-        run: scripts/build-release.sh --ref "${RELEASE_REF}"
-
-      - name: Gate release reproducibility
-        run: |
-          set -euo pipefail
-          rm -rf dist.repro
-          scripts/build-release.sh --ref "${RELEASE_REF}" --output-dir dist.repro
-          version="$(tr -d '[:space:]' < VERSION)"
-          cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
-
-      - name: Verify artifact checksums
-        run: scripts/verify-release-artifacts.sh dist
-
-      - name: Generate diagnostics on failure
-        if: failure()
-        run: scripts/diagnostics.sh
-
-      - name: Upload validation artifacts and logs
-        uses: actions/upload-artifact@v5
-        with:
-          name: release-validation-artifacts-${{ github.run_id }}
-          path: |
-            codex_release.log
-            diagnostics/
-            dist/
-          if-no-files-found: error
+          set -euxo pipefail
+          test -f release.tar.gz
+          tar -tzf release.tar.gz

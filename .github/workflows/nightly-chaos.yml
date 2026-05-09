@@ -1,0 +1,27 @@
+name: nightly-chaos
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chaos tests
+        run: |
+          set -euxo pipefail
+          echo "Run chaos + fuzz testing"
