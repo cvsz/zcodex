@@ -9,7 +9,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 defaults:
-  run: {shell: bash}
+  run: { shell: bash }
 jobs:
   validate:
     if: github.event.workflow_run.conclusion == 'success' && github.actor != 'github-actions[bot]'
@@ -27,3 +27,11 @@ jobs:
           set -Eeuo pipefail
           ls -la dist
           test -f dist/SHA256SUMS
+          sha256sum --check dist/SHA256SUMS
+      - if: always()
+        run: |
+          set -Eeuo pipefail
+          echo "## Release validation summary" >> "$GITHUB_STEP_SUMMARY"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: release-validate-debug-${{ github.run_id }}, path: dist/, if-no-files-found: ignore }
