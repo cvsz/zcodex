@@ -13,6 +13,9 @@
 : "${ZCODEX_ROLLBACK_ON_FAILURE:=true}"
 : "${ZCODEX_RUNTIME_MODE:=clean-system}"
 : "${ZCODEX_CI_TRUSTED_PATH:=/usr/sbin:/usr/bin:/sbin:/bin}"
+readonly ZCODEX_INSTALLER_ERR_INVALID_ARGS=2
+readonly ZCODEX_INSTALLER_ERR_INVALID_STATE=3
+readonly ZCODEX_INSTALLER_USAGE_EXIT=64
 
 installer_usage() {
 	cat <<USAGE
@@ -40,13 +43,13 @@ installer_parse_args() {
 			shift
 			if [[ -z "${1:-}" ]]; then
 				log_error "--runtime-mode requires one of: clean-system, existing-runtime, ci, developer"
-				return 2
+				return "${ZCODEX_INSTALLER_ERR_INVALID_ARGS}"
 			fi
 			case "$1" in
 			clean-system | existing-runtime | ci | developer | production) ZCODEX_RUNTIME_MODE="$1" ;;
 			*)
 				log_error "Invalid runtime mode: $1"
-				return 2
+				return "${ZCODEX_INSTALLER_ERR_INVALID_ARGS}"
 				;;
 			esac
 			;;
@@ -55,12 +58,12 @@ installer_parse_args() {
 		--skip-optional) SKIP_OPTIONAL=true ;;
 		-h | --help)
 			installer_usage
-			return 64
+			return "${ZCODEX_INSTALLER_USAGE_EXIT}"
 			;;
 		*)
 			log_error "Unknown option: $1"
 			installer_usage
-			return 2
+			return "${ZCODEX_INSTALLER_ERR_INVALID_ARGS}"
 			;;
 		esac
 		shift
@@ -157,6 +160,48 @@ installer_run_phase() {
 	manifest_write running
 }
 
+installer_phase_handler() {
+	case "$1" in
+	VALIDATE) printf '%s\n' "platform_validate" ;;
+	DOWNLOAD) printf '%s\n' "installer_prepare_runtime" ;;
+	VERIFY) printf '%s\n' "installer_verify_inputs" ;;
+	RUNTIME_AUDIT) printf '%s\n' "installer_runtime_audit" ;;
+	INSTALL) printf '%s\n' "installer_install_all" ;;
+	CONFIGURE) printf '%s\n' "installer_configure_codex" ;;
+	VERIFY_RUNTIME) printf '%s\n' "installer_verify_runtime" ;;
+	*)
+		log_error "Unknown installer phase '${1}'"
+		return "${ZCODEX_INSTALLER_ERR_INVALID_STATE}"
+		;;
+	esac
+}
+
+installer_phase_message() {
+	case "$1" in
+	VALIDATE) printf '%s\n' "validate platform" ;;
+	DOWNLOAD) printf '%s\n' "prepare runtime workspace" ;;
+	VERIFY) printf '%s\n' "validate pins and interrupted state" ;;
+	RUNTIME_AUDIT) printf '%s\n' "audit nodejs and npm ownership" ;;
+	INSTALL) printf '%s\n' "install core runtime" ;;
+	CONFIGURE) printf '%s\n' "configure codex runtime" ;;
+	VERIFY_RUNTIME) printf '%s\n' "validate installed tools" ;;
+	*)
+		log_error "Unknown installer phase '${1}'"
+		return "${ZCODEX_INSTALLER_ERR_INVALID_STATE}"
+		;;
+	esac
+}
+
+installer_run_default_phases() {
+	local phase handler message
+	local -a phases=(VALIDATE DOWNLOAD VERIFY RUNTIME_AUDIT INSTALL CONFIGURE VERIFY_RUNTIME)
+	for phase in "${phases[@]}"; do
+		handler="$(installer_phase_handler "${phase}")" || return $?
+		message="$(installer_phase_message "${phase}")" || return $?
+		installer_run_phase "${phase}" "${message}" "${handler}"
+	done
+}
+
 installer_prepare_recovery() {
 	if [[ -n "${INSTALLER_PREVIOUS_PHASE}" && "${INSTALLER_PREVIOUS_PHASE}" != "COMPLETE" ]]; then
 		log_warn "Interrupted zcodex install detected: $(state_recovery_summary 2>/dev/null || printf 'phase=%s' "${INSTALLER_PREVIOUS_PHASE}")"
@@ -244,7 +289,7 @@ installer_run() {
 	installer_parse_args "$@" || {
 		parse_status="$?"
 		case "${parse_status}" in
-		64) return 0 ;;
+		"${ZCODEX_INSTALLER_USAGE_EXIT}") return 0 ;;
 		*) return "${parse_status}" ;;
 		esac
 	}
@@ -264,11 +309,5 @@ installer_run() {
 	INSTALLER_PREVIOUS_PHASE="$(state_current_phase 2>/dev/null || true)"
 	INSTALLER_STATE_STARTED=true
 	installer_prepare_recovery
-	installer_run_phase VALIDATE "validate platform" platform_validate
-	installer_run_phase DOWNLOAD "prepare runtime workspace" installer_prepare_runtime
-	installer_run_phase VERIFY "validate pins and interrupted state" installer_verify_inputs
-	installer_run_phase RUNTIME_AUDIT "audit nodejs and npm ownership" installer_runtime_audit
-	installer_run_phase INSTALL "install core runtime" installer_install_all
-	installer_run_phase CONFIGURE "configure codex runtime" installer_configure_codex
-	installer_run_phase VERIFY_RUNTIME "validate installed tools" installer_verify_runtime
+	installer_run_default_phases
 }
