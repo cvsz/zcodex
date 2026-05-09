@@ -1,0 +1,32 @@
+# codex-environment.yaml
+# ENTERPRISE ENVIRONMENT CONFIG (SKELETON)
+
+container:
+  runtime: node
+  version: "20"
+  isolation: strict
+
+env:
+  NODE_ENV: production
+  PYTHONUNBUFFERED: "1"
+  LOG_LEVEL: info
+
+secrets:
+  strategy: "env"
+  redaction: true
+
+network:
+  allow_outbound: true
+  restricted_domains: []
+
+security:
+  sbom: true
+  scan_on_build: true
+  tools:
+    - trivy
+    - semgrep
+    - gitleaks
+
+notes: |
+  This is a generated baseline environment configuration.
+  Intended for CI/CD + container orchestration hardening.
