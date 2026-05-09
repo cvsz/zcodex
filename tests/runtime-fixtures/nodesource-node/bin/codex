@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+printf 'codex-cli %s\n' '0.129.0'

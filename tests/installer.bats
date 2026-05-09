@@ -711,7 +711,7 @@ completed'* ]]
 	previous_workdir="${ZCODEX_TEST_WORKDIR}"
 	teardown_test_environment
 
-	run bash -c '. "${0}/tests/helpers/runtime.bash"; export BATS_TEST_DIRNAME="${0}/tests" BATS_TEST_NUMBER=777; setup_test_environment; inject_runtime_fixture conflicting-node; printf "%s\n%s\n%s\n%s\n" "${LC_ALL}/${LANG}/${TZ}" "${HOME}" "${TMPDIR}" "$(node --version)"; teardown_test_environment' "${REPO_ROOT}"
+	run bash -c '. "${0}/tests/helpers/runtime.bash"; export BATS_TEST_DIRNAME="${0}/tests" BATS_TEST_NUMBER=777; setup_test_environment; inject_runtime_fixture conflicting-runtime; printf "%s\n%s\n%s\n%s\n" "${LC_ALL}/${LANG}/${TZ}" "${HOME}" "${TMPDIR}" "$(node --version)"; teardown_test_environment' "${REPO_ROOT}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"C.UTF-8/C.UTF-8/UTC"* ]]
 	[[ "$output" == *"/zcodex.777."* ]]

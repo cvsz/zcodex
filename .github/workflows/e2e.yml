@@ -16,7 +16,7 @@ env:
   TZ: UTC
 
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -27,7 +27,7 @@ jobs:
   containerized:
     name: ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }} / ${{ matrix.scenario }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -39,11 +39,11 @@ jobs:
           - ubuntu: '24.04'
             arch: amd64
             runner: ubuntu-24.04
-            scenario: release-reproducibility
+            scenario: manifest-reconciliation
           - ubuntu: '24.04'
             arch: arm64
             runner: ubuntu-24.04-arm
-            scenario: ci-policy-mode
+            scenario: ci-mode
     steps:
       - uses: actions/checkout@v6
       - name: Configure isolated E2E workspace

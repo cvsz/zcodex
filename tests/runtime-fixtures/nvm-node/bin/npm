@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-printf '10.8.2\n'
+printf '%s\n' '10.8.2'

@@ -8,13 +8,44 @@ normalize_locale() {
 	umask 022
 }
 
+runtime_repo_root() {
+	if [[ -n "${REPO_ROOT:-}" ]]; then
+		printf '%s\n' "${REPO_ROOT}"
+	elif [[ -n "${BATS_TEST_DIRNAME:-}" ]]; then
+		printf '%s\n' "${BATS_TEST_DIRNAME}/.."
+	else
+		pwd
+	fi
+}
+
 reset_path() {
 	export ZCODEX_TEST_SYSTEM_PATH="${ZCODEX_TEST_SYSTEM_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 	export PATH="${ZCODEX_TEST_SYSTEM_PATH}"
 }
 
+runtime_suite_root() {
+	printf '%s\n' "${ZCODEX_TEST_SUITE_ROOT:-${BATS_FILE_TMPDIR:-${TMPDIR:-/tmp}/zcodex-bats-suite}}"
+}
+
+setup_file() {
+	export REPO_ROOT
+	REPO_ROOT="$(runtime_repo_root)"
+	normalize_locale
+	reset_path
+	export ZCODEX_TEST_SUITE_ROOT
+	ZCODEX_TEST_SUITE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/zcodex-suite.XXXXXX")"
+	mkdir -p "${ZCODEX_TEST_SUITE_ROOT}/fixtures" "${ZCODEX_TEST_SUITE_ROOT}/homes" "${ZCODEX_TEST_SUITE_ROOT}/tmp"
+}
+
+teardown_file() {
+	if [[ -n "${ZCODEX_TEST_SUITE_ROOT:-}" && -d "${ZCODEX_TEST_SUITE_ROOT}" ]]; then
+		rm -rf "${ZCODEX_TEST_SUITE_ROOT}"
+	fi
+}
+
 isolate_tmpdir() {
-	local tmp_parent="${BATS_TEST_TMPDIR:-${TMPDIR:-/tmp}}"
+	local tmp_parent
+	tmp_parent="$(runtime_suite_root)/tmp"
 	mkdir -p "${tmp_parent}"
 	ZCODEX_TEST_WORKDIR="$(mktemp -d "${tmp_parent%/}/zcodex.${BATS_TEST_NUMBER:-0}.XXXXXX")"
 	export ZCODEX_TEST_WORKDIR
@@ -41,15 +72,14 @@ isolate_home() {
 }
 
 setup_test_environment() {
-	export REPO_ROOT="${BATS_TEST_DIRNAME}/.."
+	export REPO_ROOT="${REPO_ROOT:-${BATS_TEST_DIRNAME}/..}"
 	normalize_locale
 	reset_path
 	isolate_tmpdir
 	isolate_home
 	export ZCODEX_INSTALL_ID="bats-${BATS_TEST_NUMBER:-0}"
-	# Keep release-log tests deterministic even when the caller exports
-	# production-oriented log overrides into the Bats environment.
-	unset ZCODEX_RELEASE_LOG LOG_FILE
+	export ZCODEX_FIXED_TIMESTAMP="${ZCODEX_FIXED_TIMESTAMP:-2026-01-01T00:00:00Z}"
+	unset ZCODEX_RELEASE_LOG LOG_FILE NVM_DIR ASDF_DIR NODE_PATH
 	reset_path
 	inject_runtime_fixture clean-system
 }
@@ -61,26 +91,23 @@ teardown_test_environment() {
 	reset_path
 }
 
+setup() { setup_test_environment; }
+teardown() { teardown_test_environment; }
+
 runtime_fixture_root() {
 	printf '%s/tests/runtime-fixtures/%s\n' "${REPO_ROOT}" "$1"
 }
 
 runtime_fixture_hostless_bin() {
 	: "${ZCODEX_TEST_WORKDIR:?setup_test_environment must run before hostless fixture injection}"
-
 	local shim_dir command_path command_name
 	shim_dir="${ZCODEX_TEST_WORKDIR}/hostless-bin"
 	mkdir -p "${shim_dir}"
-
-	for command_name in bash mkdir mktemp rm; do
-		command_path="$(PATH="${ZCODEX_TEST_SYSTEM_PATH}" command -v "${command_name}")"
-		[[ -n "${command_path}" ]] || {
-			printf 'missing required hostless shim command: %s\n' "${command_name}" >&2
-			return 1
-		}
+	for command_name in bash cat chmod dirname env mkdir mktemp printf rm sed sh; do
+		command_path="$(PATH="${ZCODEX_TEST_SYSTEM_PATH}" command -v "${command_name}" || true)"
+		[[ -n "${command_path}" ]] || continue
 		ln -sf "${command_path}" "${shim_dir}/${command_name}"
 	done
-
 	printf '%s\n' "${shim_dir}"
 }
 
@@ -102,10 +129,7 @@ runtime_fixture_inject() {
 }
 
 runtime_fixture_write_command() {
-	local fixture="$1"
-	local name="$2"
-	local body="$3"
-	local target
+	local fixture="$1" name="$2" body="$3" target
 	target="$(runtime_fixture_root "${fixture}")/bin/${name}"
 	mkdir -p "$(dirname "${target}")"
 	printf '%s\n' "${body}" >"${target}"
@@ -113,13 +137,9 @@ runtime_fixture_write_command() {
 }
 
 runtime_fixture_fake_ownership() {
-	local fixture="$1"
-	local command_name="$2"
-	local owner="$3"
+	local fixture="$1" command_name="$2" owner="$3"
 	mkdir -p "$(runtime_fixture_root "${fixture}")/ownership"
 	printf '%s\n' "${owner}" >"$(runtime_fixture_root "${fixture}")/ownership/${command_name}.owner"
 }
 
-inject_runtime_fixture() {
-	runtime_fixture_inject "$@"
-}
+inject_runtime_fixture() { runtime_fixture_inject "$@"; }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 case " ${*} " in
-*nodejs*) printf '18.20.8-1nodesource1' ;;
-*npm*) printf '10.8.2' ;;
+*nodejs*) printf '%s\n' '22.16.0-1nodesource1' ;;
+*npm*) printf '%s\n' '10.8.2-1nodesource1' ;;
 *) exit 1 ;;
 esac

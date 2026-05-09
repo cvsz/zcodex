@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-printf 'codex-cli 0.1.0\n'
+printf 'codex-cli %s\n' '0.1.0'
