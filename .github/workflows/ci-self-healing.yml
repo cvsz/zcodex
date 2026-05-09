@@ -8,13 +8,13 @@ permissions:
   actions: read
   issues: write
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 defaults:
   run: { shell: bash }
 jobs:
   analyze:
-    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.actor.login != 'github-actions[bot]'
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.actor.login != 'github-actions[bot]' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,17 +34,11 @@ jobs:
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner, repo, workflow_id, branch, per_page: 50
             });
-            const failedRecent = runs
-              .filter(r => r.conclusion === 'failure')
-              .slice(0, 10);
+            const failedRecent = runs.filter(r => r.conclusion === 'failure').slice(0, 10);
             core.info(`Recent failures on ${branch}: ${failedRecent.length}`);
-            if (failedRecent.length >= 5) {
-              core.setFailed('Detected unstable retry storm (>=5 failures in recent runs). Manual intervention required.');
-            }
+            if (failedRecent.length >= 5) core.setFailed('Detected unstable retry storm (>=5 failures in recent runs).');
             const inProgress = runs.filter(r => r.status !== 'completed').length;
-            if (inProgress >= 3) {
-              core.setFailed('Detected workflow storm (>=3 in-progress runs for same workflow and branch).');
-            }
+            if (inProgress >= 3) core.setFailed('Detected workflow storm (>=3 in-progress runs for same workflow and branch).');
       - name: Capture forensic metadata
         run: |
           set -Eeuo pipefail
@@ -56,5 +50,6 @@ jobs:
             echo "head_sha=${{ github.event.workflow_run.head_sha }}"
             echo "head_branch=${{ github.event.workflow_run.head_branch }}"
           } | tee logs/self-healing.txt
-      - uses: actions/upload-artifact@v4
+      - if: always()
+        uses: actions/upload-artifact@v4
         with: { name: self-healing-debug-${{ github.run_id }}, path: logs/, if-no-files-found: error }
