@@ -69,6 +69,15 @@ jobs:
           sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3
       - name: Run Doctor v2
         run: scripts/doctor-ci.sh
+      - name: Ensure Doctor v2 artifact payload exists
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .doctor
+          if ! find .doctor -mindepth 1 -type f | grep -q .; then
+            printf 'Doctor v2 did not emit report files for this run.
+' > .doctor/README.txt
+          fi
       - name: Upload Doctor v2 reports
         if: always()
         uses: actions/upload-artifact@v5
