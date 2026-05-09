@@ -16,6 +16,7 @@
 - Add a dedicated documentation check for broken local links.
 - Add issue templates for bug reports and support requests.
 - Publish a social preview image aligned with the minimalist repository identity.
+- Harden the CI remediation agent with deterministic signatures, strict JSON schemas, and safe patch-application gates (see `docs/ci-agent-hardening-plan.md`).
 
 ## Release integrity
 
