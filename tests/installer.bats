@@ -720,6 +720,20 @@ completed'* ]]
 	ZCODEX_TEST_WORKDIR="${previous_workdir}"
 }
 
+@test "runtime fixture matrix includes all release-hardening scenarios" {
+	local fixture
+	for fixture in clean-system apt-node nodesource-node nvm-node broken-npm stale-runtime corrupted-manifest interrupted-install path-shadowing conflicting-runtime missing-runtime; do
+		[ -d "${REPO_ROOT}/tests/runtime-fixtures/${fixture}" ]
+	done
+}
+
+@test "runtime helper isolates npm cache and prefix" {
+	run bash -c 'printf "%s\n%s\n%s\n" "${npm_config_cache}" "${NPM_CONFIG_CACHE}" "${npm_config_prefix}"'
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"${ZCODEX_TEST_WORKDIR}/npm-cache"* ]]
+	[[ "$output" == *"${ZCODEX_TEST_WORKDIR}/npm-prefix"* ]]
+}
+
 @test "state and logging honor fixed deterministic timestamps" {
 	local tmpdir logfile
 	tmpdir="$(zcodex_tmpdir)"

@@ -43,6 +43,11 @@ jobs:
           echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-home/.cache" >>"${GITHUB_ENV}"
           echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-home/.config" >>"${GITHUB_ENV}"
           echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-home/.local/share" >>"${GITHUB_ENV}"
+          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-home/.local/state" >>"${GITHUB_ENV}"
+          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
       - name: Install validation tools
         # Install Bats from Ubuntu packages instead of a helper-library setup
         # action so CI does not restore unused third-party helper caches.
@@ -104,6 +109,11 @@ jobs:
           echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-release-home/.cache" >>"${GITHUB_ENV}"
           echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-release-home/.config" >>"${GITHUB_ENV}"
           echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-release-home/.local/share" >>"${GITHUB_ENV}"
+          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-release-home/.local/state" >>"${GITHUB_ENV}"
+          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-release-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-release-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-release-home/.npm-prefix" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-release-home/.npm-prefix" >>"${GITHUB_ENV}"
       - name: Install release validation tools
         run: |
           set -euo pipefail

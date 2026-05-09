@@ -47,6 +47,11 @@ jobs:
           echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-home/.cache" >>"${GITHUB_ENV}"
           echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-home/.config" >>"${GITHUB_ENV}"
           echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-home/.local/share" >>"${GITHUB_ENV}"
+          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-home/.local/state" >>"${GITHUB_ENV}"
+          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-home/.npm-cache" >>"${GITHUB_ENV}"
+          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
+          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-home/.npm-prefix" >>"${GITHUB_ENV}"
 
       - name: Install release validation tools
         run: |
@@ -68,11 +73,17 @@ jobs:
           command -v bash >/dev/null 2>&1 || { echo "bash not installed. Aborting." >&2; exit 1; }
           command -v git >/dev/null 2>&1 || { echo "git not installed. Aborting." >&2; exit 1; }
           command -v curl >/dev/null 2>&1 || { echo "curl not installed. Aborting." >&2; exit 1; }
-          command -v docker >/dev/null 2>&1 || { echo "Docker not installed. Aborting." >&2; exit 1; }
-          command -v node >/dev/null 2>&1 || { echo "Node.js not installed. Aborting." >&2; exit 1; }
+          if command -v docker >/dev/null 2>&1; then
+            docker --version | tee -a "${CODEX_RELEASE_LOG}"
+          else
+            echo "[Codex] Docker not found; dry-run release validation does not require host Docker." | tee -a "${CODEX_RELEASE_LOG}"
+          fi
+          if command -v node >/dev/null 2>&1; then
+            node --version | tee -a "${CODEX_RELEASE_LOG}"
+          else
+            echo "[Codex] Node.js not found; installer dry-run owns runtime validation." | tee -a "${CODEX_RELEASE_LOG}"
+          fi
           command -v kubectl >/dev/null 2>&1 || echo "[Codex] Kubernetes not found; cluster orchestration checks are not required for release packaging." | tee -a "${CODEX_RELEASE_LOG}"
-          docker --version | tee -a "${CODEX_RELEASE_LOG}"
-          node --version | tee -a "${CODEX_RELEASE_LOG}"
 
       - name: Validate tag and VERSION
         run: scripts/validate-release.sh "${GITHUB_REF_NAME}"

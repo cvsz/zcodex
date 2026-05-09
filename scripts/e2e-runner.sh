@@ -78,7 +78,7 @@ run_scenario_in_container() {
 		-v "${REPO_ROOT}:${workdir}:ro" \
 		-w "${workdir}" \
 		"${image}" \
-		bash -lc "set -euo pipefail; apt-get update; apt-get install -y bash ca-certificates curl git make tar gzip coreutils python3; mkdir -p /tmp/zcodex-home /tmp/zcodex-tmp; export HOME=/tmp/zcodex-home TMPDIR=/tmp/zcodex-tmp XDG_CACHE_HOME=/tmp/zcodex-home/.cache XDG_CONFIG_HOME=/tmp/zcodex-home/.config XDG_DATA_HOME=/tmp/zcodex-home/.local/share; ./codex.sh ${mode} ${args}"
+		bash -lc "set -euo pipefail; apt-get update; apt-get install -y bash ca-certificates curl git make tar gzip coreutils python3; mkdir -p /tmp/zcodex-home /tmp/zcodex-tmp /tmp/zcodex-state /tmp/zcodex-cache/npm /tmp/zcodex-prefix; export HOME=/tmp/zcodex-home TMPDIR=/tmp/zcodex-tmp XDG_CACHE_HOME=/tmp/zcodex-home/.cache XDG_CONFIG_HOME=/tmp/zcodex-home/.config XDG_DATA_HOME=/tmp/zcodex-home/.local/share XDG_STATE_HOME=/tmp/zcodex-home/.local/state npm_config_cache=/tmp/zcodex-cache/npm NPM_CONFIG_CACHE=/tmp/zcodex-cache/npm npm_config_prefix=/tmp/zcodex-prefix NPM_CONFIG_PREFIX=/tmp/zcodex-prefix ZCODEX_STATE_HOME=/tmp/zcodex-state ZCODEX_TMP_DIR=/tmp/zcodex-tmp/runtime; ./codex.sh ${mode} ${args}"
 }
 
 main() {
