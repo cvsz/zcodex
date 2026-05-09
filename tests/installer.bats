@@ -705,3 +705,36 @@ completed'* ]]
 	run bash -c '. "${0}/scripts/lib/exec.sh"; . "${0}/scripts/lib/platform.sh"; . "${0}/scripts/lib/manifest.sh"; manifest_validate_schema "${1}"' "${REPO_ROOT}" "${ZCODEX_RUNTIME_FIXTURE_DIR}/manifest.json"
 	[ "$status" -ne 0 ]
 }
+
+@test "runtime helper exposes required isolation aliases" {
+	local previous_workdir
+	previous_workdir="${ZCODEX_TEST_WORKDIR}"
+	teardown_test_environment
+
+	run bash -c '. "${0}/tests/helpers/runtime.bash"; export BATS_TEST_DIRNAME="${0}/tests" BATS_TEST_NUMBER=777; setup_test_environment; inject_runtime_fixture conflicting-node; printf "%s\n%s\n%s\n%s\n" "${LC_ALL}/${LANG}/${TZ}" "${HOME}" "${TMPDIR}" "$(node --version)"; teardown_test_environment' "${REPO_ROOT}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"C.UTF-8/C.UTF-8/UTC"* ]]
+	[[ "$output" == *"/zcodex.777."* ]]
+	[[ "$output" == *"v20.11.0"* ]]
+
+	ZCODEX_TEST_WORKDIR="${previous_workdir}"
+}
+
+@test "state and logging honor fixed deterministic timestamps" {
+	local tmpdir logfile
+	tmpdir="$(zcodex_tmpdir)"
+	logfile="${tmpdir}/fixed.log"
+	run env HOME="${tmpdir}/home" LOG_FILE="${logfile}" ZCODEX_FIXED_TIMESTAMP="2001-02-03T04:05:06Z" bash -c '. "${0}/scripts/lib/logging.sh"; . "${0}/scripts/lib/state.sh"; logging_init; state_mark VERIFY "fixed clock" running; log_json INFO "fixed log"; cat "${ZCODEX_STATE_DIR}/history.log"; cat "${LOG_FILE}"' "${REPO_ROOT}"
+	rm -rf "${tmpdir}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"2001-02-03T04:05:06Z phase=VERIFY"* ]]
+	[[ "$output" == *'"timestamp":"2001-02-03T04:05:06Z"'* ]]
+	[[ "$output" == *"[2001-02-03T04:05:06Z]"* ]]
+}
+
+@test "missing-runtime fixture contains no host node or npm shadow" {
+	inject_runtime_fixture missing-runtime
+	run bash -c 'command -v node || true; command -v npm || true'
+	[ "$status" -eq 0 ]
+	[ "$output" = "" ]
+}

@@ -3,9 +3,21 @@
 
 : "${ZCODEX_BACKUP_DIR:=}"
 
+backup_timestamp_compact() {
+	local timestamp
+	if declare -F zcodex_utc_now >/dev/null 2>&1; then
+		timestamp="$(zcodex_utc_now)"
+	elif [[ -n "${ZCODEX_FIXED_TIMESTAMP:-}" ]]; then
+		timestamp="${ZCODEX_FIXED_TIMESTAMP}"
+	else
+		timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	fi
+	printf '%s\n' "${timestamp}" | tr -d '-:'
+}
+
 backup_init() {
 	if [[ -z "${ZCODEX_BACKUP_DIR}" ]]; then
-		ZCODEX_BACKUP_DIR="${HOME}/.zcodex/backups/$(date -u +%Y%m%dT%H%M%SZ)"
+		ZCODEX_BACKUP_DIR="${HOME}/.zcodex/backups/$(backup_timestamp_compact)"
 	fi
 	install -d -m 700 "${ZCODEX_BACKUP_DIR}"
 	printf '%s\n' "${ZCODEX_BACKUP_DIR}"

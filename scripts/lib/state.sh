@@ -13,14 +13,36 @@ state_dir_default() {
 	printf '%s\n' "${ZCODEX_STATE_DIR}"
 }
 
+state_now_utc() {
+	if declare -F zcodex_utc_now >/dev/null 2>&1; then
+		zcodex_utc_now
+	elif [[ -n "${ZCODEX_FIXED_TIMESTAMP:-}" ]]; then
+		printf '%s\n' "${ZCODEX_FIXED_TIMESTAMP}"
+	else
+		date -u +%Y-%m-%dT%H:%M:%SZ
+	fi
+}
+
+state_install_id_timestamp() {
+	if [[ -n "${ZCODEX_FIXED_INSTALL_ID_TIMESTAMP:-}" ]]; then
+		printf '%s\n' "${ZCODEX_FIXED_INSTALL_ID_TIMESTAMP}"
+	elif [[ -n "${ZCODEX_FIXED_TIMESTAMP:-}" ]]; then
+		printf '%s\n' "${ZCODEX_FIXED_TIMESTAMP//[-:]/}" | sed 's/Z$/Z/'
+	else
+		date -u +%Y%m%dT%H%M%SZ
+	fi
+}
+
 state_atomic_write() {
 	local target="$1"
 	local content="$2"
-	local tmp
-	tmp="${target}.$$.tmp"
+	local target_dir tmp
+	target_dir="$(dirname "${target}")"
+	install -d -m 700 "${target_dir}"
+	tmp="$(mktemp "${target_dir}/.$(basename "${target}").XXXXXX")"
 	printf '%s\n' "${content}" >"${tmp}"
 	chmod 600 "${tmp}"
-	mv "${tmp}" "${target}"
+	mv -f "${tmp}" "${target}"
 }
 
 state_install_id_file() {
@@ -38,7 +60,7 @@ state_read_or_create_install_id() {
 	elif [[ -n "${ZCODEX_INSTALL_ID}" ]]; then
 		printf '%s\n' "${ZCODEX_INSTALL_ID}"
 	else
-		printf '%s-%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" "$$"
+		printf '%s-%s\n' "$(state_install_id_timestamp)" "$$"
 	fi
 }
 
@@ -126,7 +148,7 @@ state_mark_in() {
 		return 1
 	fi
 
-	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	now="$(state_now_utc)"
 	state_init "${state_home}" "${state_dir}"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
 	state_atomic_write "$(state_phase_file "${state_dir}")" "${phase}"
@@ -156,7 +178,7 @@ state_complete_phase_in() {
 
 	state_init "${state_home}" "${state_dir}"
 	install -d -m 700 "$(state_completed_dir "${state_dir}")"
-	now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	now="$(state_now_utc)"
 	install_id="$(state_read_or_create_install_id "${state_dir}")"
 	state_atomic_write "$(state_phase_completed_file "${phase}" "${state_dir}")" "${now}"
 	printf '%s phase=%s status=completed install_id=%s message=phase-complete\n' "${now}" "${phase}" "${install_id}" >>"$(state_history_file "${state_dir}")"

@@ -12,6 +12,14 @@ LOG_COLOR_CYAN=''
 LOG_COLOR_BOLD=''
 LOG_COLOR_RESET=''
 
+log_timestamp() {
+	if [[ -n "${ZCODEX_FIXED_TIMESTAMP:-}" ]]; then
+		printf '%s\n' "${ZCODEX_FIXED_TIMESTAMP}"
+	else
+		date -u '+%Y-%m-%dT%H:%M:%SZ'
+	fi
+}
+
 logging_init() {
 	if [[ -t 2 && "${CI_MODE}" != "true" ]]; then
 		LOG_COLOR_RED=$'\033[0;31m'
@@ -29,7 +37,7 @@ log_write() {
 	shift
 	local message="$*"
 	local timestamp
-	timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	timestamp="$(log_timestamp)"
 	printf '[%s] [%s] %s\n' "${timestamp}" "${level}" "${message}" >>"${LOG_FILE}"
 	printf '%s\n' "${message}" >&2
 }
@@ -55,7 +63,7 @@ log_json() {
 	shift
 	local message="$*"
 	local timestamp
-	timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	timestamp="$(log_timestamp)"
 	printf '{"timestamp":"%s","level":"%s","message":"%s"}\n' \
 		"${timestamp}" \
 		"$(log_json_escape "${level}")" \
