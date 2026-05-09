@@ -1,0 +1,8 @@
+Analyze repository cvsz/zcodex: languages/frameworks/runtimes/package managers/monorepo/CI/deploy/containers/orchestration/IaC/security/testing/generated+vendored code.
+Generate maps: repository, execution flow, runtime dependency graph, trust boundaries, attack surface, integrations, privileged paths, storage, auth/authz, async/concurrency.
+Write:
+- .codex/reports/repository-map.md
+- .codex/reports/attack-surface.md
+- .codex/reports/runtime-graph.md
+- .codex/reports/high-risk-areas.md
+Also identify weak, legacy, brittle, untested, high-churn, unsafe areas.

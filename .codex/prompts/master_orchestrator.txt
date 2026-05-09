@@ -1,0 +1,5 @@
+Spawn specialized agents: recon, security, fuzzing, CI, dependency, architecture, concurrency, performance, regression, release.
+Shared memory: .codex/shared-memory/
+Agents deduplicate findings, verify exploitability, validate fixes, reject false positives.
+High/critical findings require dedicated review, exploitability validation, regression coverage, rollback-safe patching.
+Validation agent reruns scans and confirms convergence.

@@ -1,0 +1,6 @@
+Run full validation: clean/deterministic install, clean build, reproducible artifacts, all tests/workflows/containers/deployment/release paths/security scans/linters/type checks.
+Generate release readiness, unresolved risks, technical debt, rollback/DR/upgrade notes, changelog draft.
+Success: zero test/workflow/crash/type/lint failures and zero critical vulnerabilities.
+Write:
+- .codex/reports/final-validation.md
+- .codex/reports/release-readiness.md
