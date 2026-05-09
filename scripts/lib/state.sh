@@ -52,16 +52,28 @@ state_install_id_file() {
 
 state_read_or_create_install_id() {
 	local state_dir="${1:-$(state_dir_default)}"
-	local install_id_file
+	local install_id_file candidate
 
 	install_id_file="$(state_install_id_file "${state_dir}")"
+	install -d -m 700 "${state_dir}"
 	if [[ -r "${install_id_file}" ]]; then
 		cat "${install_id_file}"
-	elif [[ -n "${ZCODEX_INSTALL_ID}" ]]; then
-		printf '%s\n' "${ZCODEX_INSTALL_ID}"
-	else
-		printf '%s-%s\n' "$(state_install_id_timestamp)" "$$"
+		return 0
 	fi
+
+	if [[ -n "${ZCODEX_INSTALL_ID:-}" ]]; then
+		candidate="${ZCODEX_INSTALL_ID}"
+	else
+		candidate="$(state_install_id_timestamp)-$$"
+	fi
+
+	if (set -o noclobber; printf '%s\n' "${candidate}" >"${install_id_file}") 2>/dev/null; then
+		chmod 600 "${install_id_file}"
+		printf '%s\n' "${candidate}"
+		return 0
+	fi
+
+	cat "${install_id_file}"
 }
 
 state_init() {
