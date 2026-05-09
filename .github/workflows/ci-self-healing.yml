@@ -1,41 +1,30 @@
 name: ci-self-healing
-
 on:
   workflow_run:
-    workflows:
-      - ci
-    types:
-      - completed
-
+    workflows: [ci]
+    types: [completed]
 permissions:
   contents: read
-  pull-requests: write
-
+  issues: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
-  run:
-    shell: bash
-
+  run: {shell: bash}
 jobs:
   analyze:
-    if: >
-      github.event.workflow_run.conclusion == 'failure' &&
-      github.actor != 'github-actions[bot]'
+    if: github.event.workflow_run.conclusion == 'failure' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Analyze failures
-        run: |
-          set -euxo pipefail
-          echo "Analyzing CI failures"
-      - name: Upload diagnostics
-        uses: actions/upload-artifact@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          echo "run_id=${{ github.event.workflow_run.id }}" | tee logs/self-healing.txt
+      - uses: actions/upload-artifact@v4
         with:
-          name: diagnostics
-          path: |
-            .codex/reports/
-            logs/
+          name: self-healing-debug-${{ github.run_id }}
+          if-no-files-found: error
+          path: logs/

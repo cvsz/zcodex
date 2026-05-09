@@ -1,26 +1,22 @@
 name: codeql
-
 on:
   push:
   pull_request:
   schedule:
     - cron: '0 5 * * 0'
-
 permissions:
-  actions: read
   contents: read
+  actions: read
   security-events: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
   run:
     shell: bash
-
 jobs:
   analyze:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -29,7 +25,11 @@ jobs:
         language: [javascript, python]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
       - uses: github/codeql-action/analyze@v3

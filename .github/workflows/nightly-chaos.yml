@@ -1,27 +1,22 @@
 name: nightly-chaos
-
 on:
   schedule:
     - cron: '0 2 * * *'
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
-  run:
-    shell: bash
-
+  run: {shell: bash}
 jobs:
   chaos:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Chaos tests
-        run: |
-          set -euxo pipefail
-          echo "Run chaos + fuzz testing"
+        with: {fetch-depth: 0, persist-credentials: false}
+      - run: |
+          set -Eeuo pipefail
+          echo 'Chaos test placeholder (deterministic seed=20260509)'

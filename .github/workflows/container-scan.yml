@@ -1,31 +1,28 @@
 name: container-scan
-
-on:
-  push:
-  pull_request:
-
+on: {push: {}, pull_request: {}}
 permissions:
   contents: read
-
+  security-events: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 defaults:
-  run:
-    shell: bash
-
+  run: {shell: bash}
 jobs:
   trivy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
-        run: |
-          set -euxo pipefail
-          docker build -t zcodex:test .
-      - name: Scan image
-        uses: aquasecurity/trivy-action@master
+        with: {fetch-depth: 0, persist-credentials: false}
+      - run: |
+          set -Eeuo pipefail
+          docker build --pull --no-cache -t zcodex:test .
+      - uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: zcodex:test
+          format: sarif
+          output: trivy.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with: {sarif_file: trivy.sarif}
