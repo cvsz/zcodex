@@ -3,6 +3,11 @@
 
 set -Eeuo pipefail
 
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+export LANG="${LANG:-C.UTF-8}"
+export TZ="${TZ:-UTC}"
+umask 022
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -82,9 +87,11 @@ validate_release_context() {
 
 validate_environment() {
 	log "Validating release/runtime dependencies before release work"
-	validate_required_tooling || fail "missing release/runtime dependencies"
-	require_command gzip 'gzip compressor' || fail "missing release archive dependency: gzip"
-	require_command tar 'tar archiver' || fail "missing release archive dependency: tar"
+	if [[ "${SKIP_VALIDATE}" -eq 1 ]]; then
+		validate_release_tooling || fail "missing release archive dependencies"
+	else
+		validate_required_tooling || fail "missing release/runtime dependencies"
+	fi
 	if [[ "${SKIP_VALIDATE}" -eq 0 ]]; then
 		require_command make 'make build orchestrator' || fail "missing validation dependency: make"
 	fi

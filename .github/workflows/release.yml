@@ -33,6 +33,9 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  TZ: UTC
 
 permissions:
   contents: write
@@ -63,6 +66,16 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Configure isolated release workspace
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/zcodex-release-tmp" "${RUNNER_TEMP}/zcodex-home"
+          echo "TMPDIR=${RUNNER_TEMP}/zcodex-release-tmp" >>"${GITHUB_ENV}"
+          echo "HOME=${RUNNER_TEMP}/zcodex-home" >>"${GITHUB_ENV}"
+          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-home/.cache" >>"${GITHUB_ENV}"
+          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-home/.config" >>"${GITHUB_ENV}"
+          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-home/.local/share" >>"${GITHUB_ENV}"
 
       - name: Install release validation tools
         run: |
@@ -125,7 +138,14 @@ jobs:
       - name: Build deterministic release artifacts
         run: |
           set -euo pipefail
-          scripts/release.sh --skip-validate --ref "${RELEASE_REF}"
+          scripts/build-release.sh --ref "${RELEASE_REF}"
+
+      - name: Gate release reproducibility
+        run: |
+          set -euo pipefail
+          scripts/build-release.sh --ref "${RELEASE_REF}" --output-dir dist.repro
+          version="$(tr -d '[:space:]' < VERSION)"
+          cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
 
       - name: Verify artifact checksums
         run: |

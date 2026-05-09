@@ -17,6 +17,14 @@ ZCODEX_REQUIRED_TOOLING=(
 	python3
 )
 
+ZCODEX_RELEASE_TOOLING=(
+	bash
+	git
+	tar
+	gzip
+	sha256sum
+)
+
 _dependency_log() {
 	local level="$1"
 	shift
@@ -112,24 +120,44 @@ require_command() {
 	return 1
 }
 
-validate_required_tooling() {
+validate_tooling_set() {
+	local label="$1"
+	local quick_fix="$2"
+	local manual_install="$3"
+	shift 3
 	local command_name
 
 	DEPENDENCY_FAILURES=0
-	_dependency_log INFO 'Validating required development and release tooling.'
+	_dependency_log INFO "Validating ${label}."
 
-	for command_name in "${ZCODEX_REQUIRED_TOOLING[@]}"; do
+	for command_name in "$@"; do
 		require_command "${command_name}" || true
 	done
 
 	if ((DEPENDENCY_FAILURES > 0)); then
 		_dependency_log ERROR "Environment validation failed with ${DEPENDENCY_FAILURES} missing required dependency/dependencies."
-		_dependency_log INFO 'Ubuntu quick fix: make deps-dev'
-		_dependency_log INFO 'Manual Ubuntu install: sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip python3'
+		_dependency_log INFO "Ubuntu quick fix: ${quick_fix}"
+		_dependency_log INFO "Manual Ubuntu install: ${manual_install}"
 		return 1
 	fi
 
-	_dependency_log OK 'All required development and release dependencies are available.'
+	_dependency_log OK "All ${label} are available."
+}
+
+validate_required_tooling() {
+	validate_tooling_set \
+		'required development and release tooling' \
+		'make deps-dev' \
+		'sudo apt install bash git curl shellcheck shfmt bats tar coreutils make gzip python3' \
+		"${ZCODEX_REQUIRED_TOOLING[@]}"
+}
+
+validate_release_tooling() {
+	validate_tooling_set \
+		'release archive tooling' \
+		'sudo apt install bash git tar coreutils gzip' \
+		'sudo apt install bash git tar coreutils gzip' \
+		"${ZCODEX_RELEASE_TOOLING[@]}"
 }
 
 install_dev_dependencies_ubuntu() {
