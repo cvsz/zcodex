@@ -46,7 +46,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-validate-${{ github.workflow }}-${{ github.ref }}
+  group: doctor-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:

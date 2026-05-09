@@ -16,7 +16,7 @@ env:
   TZ: UTC
 
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  group: doctor-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
