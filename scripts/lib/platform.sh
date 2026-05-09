@@ -13,6 +13,41 @@ platform_proc_version_file() {
 	printf '%s\n' "${ZCODEX_PROC_VERSION_FILE:-/proc/version}"
 }
 
+
+platform_read_os_release_value() {
+	local key="$1"
+	local os_release_file
+	os_release_file="$(platform_os_release_file)"
+	[[ -r "${os_release_file}" && -f "${os_release_file}" ]] || return 1
+	python3 - "${os_release_file}" "${key}" <<'PYREAD'
+import shlex
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+for raw_line in path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    name, value = line.split("=", 1)
+    if name.strip() != key:
+        continue
+    value = value.strip()
+    if value.startswith(("'", '"')):
+        try:
+            parsed = shlex.split(f"x={value}", posix=True)
+            if parsed:
+                print(parsed[0].split("=", 1)[1])
+                sys.exit(0)
+        except Exception:
+            pass
+    print(value)
+    sys.exit(0)
+sys.exit(1)
+PYREAD
+}
+
 platform_arch() {
 	uname -m
 }
@@ -33,30 +68,28 @@ platform_is_supported_arch() {
 }
 
 platform_os_id() {
-	local os_release_file
-	os_release_file="$(platform_os_release_file)"
-	[[ -r "${os_release_file}" ]] || return 1
-	# shellcheck disable=SC1090
-	. "${os_release_file}"
-	printf '%s\n' "${ID:-unknown}"
+	local os_id
+	os_id="$(platform_read_os_release_value ID 2>/dev/null || true)"
+	printf '%s\n' "${os_id:-unknown}"
 }
 
 platform_os_version_id() {
-	local os_release_file
-	os_release_file="$(platform_os_release_file)"
-	[[ -r "${os_release_file}" ]] || return 1
-	# shellcheck disable=SC1090
-	. "${os_release_file}"
-	printf '%s\n' "${VERSION_ID:-unknown}"
+	local version_id
+	version_id="$(platform_read_os_release_value VERSION_ID 2>/dev/null || true)"
+	printf '%s\n' "${version_id:-unknown}"
 }
 
 platform_pretty_name() {
-	local os_release_file
-	os_release_file="$(platform_os_release_file)"
-	if [[ -r "${os_release_file}" ]]; then
-		# shellcheck disable=SC1090
-		. "${os_release_file}"
-		printf '%s\n' "${PRETTY_NAME:-${ID:-unknown} ${VERSION_ID:-}}"
+	local pretty_name os_id version_id
+	pretty_name="$(platform_read_os_release_value PRETTY_NAME 2>/dev/null || true)"
+	if [[ -n "${pretty_name}" ]]; then
+		printf '%s\n' "${pretty_name}"
+		return 0
+	fi
+	os_id="$(platform_read_os_release_value ID 2>/dev/null || true)"
+	version_id="$(platform_read_os_release_value VERSION_ID 2>/dev/null || true)"
+	if [[ -n "${os_id}" || -n "${version_id}" ]]; then
+		printf '%s\n' "${os_id:-unknown} ${version_id:-}"
 		return 0
 	fi
 	printf '%s\n' 'unknown Linux'

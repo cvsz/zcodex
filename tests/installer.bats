@@ -40,6 +40,41 @@ SH
 	[ "$output" = "arm64" ]
 }
 
+
+@test "platform does not execute os-release content from override file" {
+	local os_release marker
+	os_release="$(zcodex_tmpfile)"
+	marker="$(zcodex_tmpfile)"
+	cat >"${os_release}" <<EOF
+ID=ubuntu
+VERSION_ID="24.04"
+PRETTY_NAME="Ubuntu 24.04 LTS"
+\$(touch "${marker}")
+EOF
+	run env ZCODEX_OS_RELEASE_FILE="${os_release}" bash -c '. "${0}/scripts/lib/platform.sh"; platform_os_id; platform_os_version_id; platform_pretty_name' "${REPO_ROOT}"
+	rm -f "${os_release}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"ubuntu"* ]]
+	[[ "$output" == *"24.04"* ]]
+	[[ "$output" == *"Ubuntu 24.04 LTS"* ]]
+	[ ! -f "${marker}" ]
+	rm -f "${marker}"
+}
+
+@test "platform parses quoted os-release values safely" {
+	local os_release
+	os_release="$(zcodex_tmpfile)"
+	cat >"${os_release}" <<'EOF'
+ID="ubuntu"
+VERSION_ID='24.04'
+PRETTY_NAME="Ubuntu Linux \"Stable\""
+EOF
+	run env ZCODEX_OS_RELEASE_FILE="${os_release}" bash -c '. "${0}/scripts/lib/platform.sh"; printf "%s|%s|%s\n" "$(platform_os_id)" "$(platform_os_version_id)" "$(platform_pretty_name)"' "${REPO_ROOT}"
+	rm -f "${os_release}"
+	[ "$status" -eq 0 ]
+	[[ "$output" == 'ubuntu|24.04|Ubuntu Linux "Stable"' ]]
+}
+
 @test "platform detects WSL from proc version" {
 	local proc_version
 	proc_version="$(zcodex_tmpfile)"
