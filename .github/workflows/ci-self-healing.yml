@@ -1,0 +1,82 @@
+name: ci-self-healing
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  TZ: UTC
+
+jobs:
+  self-heal:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install jq and python
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq python3
+
+      - name: Prepare inputs
+        id: prep
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .ci-self-heal
+          run_id="${{ github.event.workflow_run.id }}"
+          gh api "repos/${{ github.repository }}/actions/runs/${run_id}/logs" > .ci-self-heal/logs.zip
+          unzip -oq .ci-self-heal/logs.zip -d .ci-self-heal/logs
+          first_log="$(find .ci-self-heal/logs -type f | head -n1)"
+          scripts/extract-failure-context.sh "$first_log" 250 > .ci-self-heal/preprocessed_log.txt
+          echo "workflow_name=${{ github.event.workflow_run.name }}" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          git diff --name-only HEAD~1 > .ci-self-heal/changed_files.txt || true
+
+      - name: Prompt A
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+import json, os
+pre = open('.ci-self-heal/preprocessed_log.txt', encoding='utf-8').read()
+changed = [x.strip() for x in open('.ci-self-heal/changed_files.txt', encoding='utf-8') if x.strip()]
+payload = {
+  'workflow_name': os.environ['WORKFLOW_NAME'],
+  'commit_sha': os.environ['COMMIT_SHA'],
+  'changed_files': changed,
+  'preprocessed_log': pre,
+}
+open('.ci-self-heal/prompt-a-input.json','w',encoding='utf-8').write(json.dumps(payload))
+PY
+        env:
+          WORKFLOW_NAME: ${{ steps.prep.outputs.workflow_name }}
+          COMMIT_SHA: ${{ steps.prep.outputs.commit_sha }}
+
+      - name: Prompt B/C/D placeholders
+        run: |
+          set -Eeuo pipefail
+          # Intentionally left as orchestrator placeholders for sequential API calls.
+          # The repository-level prompt definitions are consumed by an external caller.
+          printf '{"status":"placeholder"}\n' > .ci-self-heal/prompt-b-result.json
+          printf '{"status":"placeholder"}\n' > .ci-self-heal/prompt-c-result.json
+          printf '{"status":"placeholder"}\n' > .ci-self-heal/prompt-d-result.json
+
+      - name: Persist failure history skeleton
+        run: |
+          set -Eeuo pipefail
+          test -f tests/ci-failure-history.jsonl
+
