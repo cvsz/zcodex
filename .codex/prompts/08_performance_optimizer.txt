@@ -1,6 +1,0 @@
-Profile CPU/memory/allocations/I-O/startup/network/db/locks/async/container startup.
-Identify hot paths, N+1, lock contention, allocation waste, duplicate computation, blocking async, cache misses, serialization overhead.
-Optimize latency/throughput/memory/startup/scaling/binary size with before-after benchmarks preserving correctness/API compatibility.
-Write:
-- .codex/benchmarks/
-- .codex/reports/performance-analysis.md
