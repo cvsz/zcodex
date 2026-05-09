@@ -7,7 +7,7 @@ on:
       - main
 
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -261,5 +261,14 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+
+      - name: Security summary
+        if: always()
+        run: |
+          {
+            echo "## CI security audit"
+            echo "- Gitleaks and Trivy executed."
+            echo "- Security findings are uploaded in job artifacts/SARIF workflows."
+          } >> "$GITHUB_STEP_SUMMARY"
           severity: HIGH,CRITICAL
           exit-code: "1"

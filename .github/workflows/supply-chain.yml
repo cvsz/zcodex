@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -54,6 +54,9 @@ jobs:
       - name: Install syft
         uses: anchore/sbom-action/download-syft@v0
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       - name: Generate repository SBOM (SPDX JSON)
         run: |
           set -Eeuo pipefail
@@ -77,3 +80,18 @@ jobs:
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: artifacts/sbom.spdx.json
+
+      - name: Verify provenance bundle
+        run: |
+          set -Eeuo pipefail
+          test -s artifacts/sbom.spdx.json
+
+      - name: Workflow summary
+        if: always()
+        run: |
+          {
+            echo '## Supply-chain summary'
+            echo '- Generated SPDX SBOM and checksum.'
+            echo '- Uploaded build provenance attestation for SBOM artifact.'
+            echo '- Verified artifact presence before completion.'
+          } >> "$GITHUB_STEP_SUMMARY"

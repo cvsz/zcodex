@@ -19,7 +19,7 @@ env:
   TZ: UTC
 
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: ci-self-healing-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
