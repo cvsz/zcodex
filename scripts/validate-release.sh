@@ -2,6 +2,11 @@
 # Validate that a release tag, VERSION, and changelog form a publishable release.
 set -euo pipefail
 
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export TZ=UTC
+umask 022
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERSION_FILE="${REPO_ROOT}/VERSION"

@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERSION_FILE="${REPO_ROOT}/VERSION"
 CHANGELOG_FILE="${REPO_ROOT}/CHANGELOG.md"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/dist}"
-SOURCE_DATE_EPOCH_OVERRIDE="${SOURCE_DATE_EPOCH:-}"
+RELEASE_MTIME="UTC 2025-01-01"
 SKIP_VALIDATE=0
 CLEAN_OUTPUT=1
 VERSION_OVERRIDE=""
@@ -150,28 +150,10 @@ when repository signing keys, OIDC policy, and SBOM ownership are finalized.
 SIGNING
 }
 
-release_source_date_epoch() {
-	if [[ -n "${SOURCE_DATE_EPOCH_OVERRIDE}" ]]; then
-		[[ "${SOURCE_DATE_EPOCH_OVERRIDE}" =~ ^[0-9]+$ ]] || fail "SOURCE_DATE_EPOCH must be an integer Unix timestamp"
-		printf '%s\n' "${SOURCE_DATE_EPOCH_OVERRIDE}"
-		return 0
-	fi
-
-	if git -C "${REPO_ROOT}" rev-parse --verify "${GIT_REF}^{commit}" >/dev/null 2>&1; then
-		git -C "${REPO_ROOT}" log -1 --format=%ct "${GIT_REF}"
-		return 0
-	fi
-
-	printf '%s\n' 0
-}
-
 release_archive_stream() {
 	local version="$1"
 	local tag="v${version}"
 	local prefix="zcodex-${tag}"
-	local epoch
-
-	epoch="$(release_source_date_epoch)"
 	(
 		local staging_dir
 		staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/zcodex-release.XXXXXX")"
@@ -183,7 +165,7 @@ release_archive_stream() {
 			--sort=name \
 			--format=posix \
 			--pax-option='exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime' \
-			--mtime="@${epoch}" \
+			--mtime="${RELEASE_MTIME}" \
 			--owner=0 \
 			--group=0 \
 			--numeric-owner \

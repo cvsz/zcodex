@@ -1,0 +1,444 @@
+diff --git a/Makefile b/Makefile
+index 01ba88c..5204476 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,13 +18,13 @@ validate-env:
+ 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'
+ 
+ lint:
+-	{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | sort -z; } | xargs -0 shellcheck
++	{ printf '%s\0' codex.sh reproducibility_validation.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | LC_ALL=C sort -z; } | xargs -0 shellcheck
+ 
+ fmt:
+-	shfmt -w codex.sh scripts tests
++	shfmt -w codex.sh reproducibility_validation.sh scripts tests
+ 
+ fmt-check:
+-	shfmt -d codex.sh scripts tests
++	shfmt -d codex.sh reproducibility_validation.sh scripts tests
+ 
+ workflow-policy:
+ 	python3 tests/workflow_policy.py
+diff --git a/codex.sh b/codex.sh
+index 4769adf..82b844b 100755
+--- a/codex.sh
++++ b/codex.sh
+@@ -3,6 +3,11 @@
+ 
+ set -Eeuo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ ZCODEX_RELEASE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ readonly ZCODEX_RELEASE_SCRIPT_DIR
+ readonly ZCODEX_RELEASE_LIB_DIR="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/lib"
+diff --git a/nondeterminism_report.md b/nondeterminism_report.md
+new file mode 100644
+index 0000000..7cb87b0
+--- /dev/null
++++ b/nondeterminism_report.md
+@@ -0,0 +1,40 @@
++# Nondeterminism report
++
++Date: 2026-05-09
++
++## Eliminated in this patch
++
++| Pattern | Location | Replacement |
++| --- | --- | --- |
++| Ambient locale/timezone | Standalone Bash entry points | Early `LC_ALL=C.UTF-8`, `LANG=C.UTF-8`, `TZ=UTC` exports |
++| Locale-sensitive lint traversal | `Makefile` lint target | `find ... -print0 | LC_ALL=C sort -z` |
++| Git timestamp release mtime | `scripts/release.sh` | Fixed `tar --mtime='UTC 2025-01-01'` |
++| Manual two-build verification gap | Repository root | Added `reproducibility_validation.sh` |
++
++## Confirmed deterministic release controls
++
++- Archive source: committed Git tree via `git archive` into a staging directory.
++- File ordering: `tar --sort=name`.
++- Metadata: fixed mtime, owner `0`, group `0`, and numeric ownership.
++- Compression: `gzip -n`.
++- Checksums: `sha256sum` over the deterministic archive name.
++- Rebuild validation: two clean builds plus `sha256sum -c` and `cmp`.
++
++## Remaining accepted nondeterminism
++
++| Area | Reason |
++| --- | --- |
++| Runtime manifests | They intentionally describe the current host runtime, PATH digest, command versions, and command hashes. |
++| Diagnostics bundle | It is a point-in-time troubleshooting snapshot, not a release artifact. |
++| GitHub runner package versions | Workflows were not modified in this phase by request. |
++| Network/package manager state | Installer resolves apt/npm state at runtime; dry-run and validation reduce but cannot remove host package drift. |
++
++## Repository rule
++
++Use deterministic traversal and serialization in new shell code:
++
++```bash
++find . -type f | LC_ALL=C sort
++jq -S '.'
++tar --sort=name --mtime='UTC 2025-01-01' --owner=0 --group=0 --numeric-owner -cf - INPUT | gzip -n
++```
+diff --git a/release_reproducibility.md b/release_reproducibility.md
+new file mode 100644
+index 0000000..113a965
+--- /dev/null
++++ b/release_reproducibility.md
+@@ -0,0 +1,44 @@
++# Release reproducibility
++
++Date: 2026-05-09
++
++## Contract
++
++Release artifacts are reproducible for the same committed Git tree and release version.
++
++## Archive rules
++
++`scripts/release.sh` builds `zcodex-vX.Y.Z.tar.gz` with:
++
++- `tar --sort=name`
++- `tar --mtime='UTC 2025-01-01'`
++- `tar --owner=0 --group=0 --numeric-owner`
++- `gzip -n`
++- C locale and UTC timezone
++
++## Checksum rules
++
++- `SHA256SUMS` is generated with `sha256sum zcodex-vX.Y.Z.tar.gz`.
++- The checksum file is verified with `sha256sum -c`.
++- Two independent build directories must produce byte-identical archives.
++
++## Validation
++
++Run:
++
++```bash
++./reproducibility_validation.sh
++```
++
++The script:
++
++1. Removes two reproducibility output directories.
++2. Builds with `scripts/build-release.sh` into each directory.
++3. Verifies each `SHA256SUMS` file.
++4. Compares archives with `cmp`.
++5. Prints the shared SHA-256 digest.
++
++## Exclusions
++
++- Runtime manifests and diagnostics are host snapshots and are not release reproducibility artifacts.
++- Workflows were not modified in this phase.
+diff --git a/repository_audit.md b/repository_audit.md
+new file mode 100644
+index 0000000..6a67b6b
+--- /dev/null
++++ b/repository_audit.md
+@@ -0,0 +1,38 @@
++# Repository audit
++
++Date: 2026-05-09
++
++## Scope
++
++- Audited `scripts/`, `tests/`, `.github/workflows/`, release scripts, manifest/state logic, runtime ownership checks, PATH validation, lock/temp handling, and recovery semantics.
++- Constraints honored: README and workflows were not modified; no E2E implementation was added.
++
++## Phase 1 findings
++
++| Area | Evidence | Risk | Status |
++| --- | --- | --- | --- |
++| Process locale | Some standalone entry points did not export locale/timezone before parsing or calling utilities. | Locale-sensitive `sort`, `tr`, `grep`, `awk`, and timestamp formatting can drift by host. | Fixed in Phase 2. |
++| Release mtime | Release archive mtime previously derived from Git commit time unless overridden. | Same file tree can hash differently across equivalent refs with different commit timestamps. | Fixed to `UTC 2025-01-01`. |
++| ShellCheck file traversal | Makefile lint target sorted with ambient locale. | CI/local file order can differ under non-C locales. | Fixed with `LC_ALL=C sort -z`. |
++| Release archive ordering | Release path already used `tar --sort=name`, normalized owner/group, and `gzip -n`. | Low; deterministic foundation exists. | Retained and documented. |
++| Diagnostics archive | Diagnostics bundle records current host facts and current epoch. | Intended runtime snapshot, not release artifact; not byte-reproducible by design. | Documented as non-release output. |
++| Manifest writes | Manifest write uses temp file plus `mv`; schema validation exists. | Good crash behavior for main manifest; JSONL install records remain append-only mutable history. | Acceptable, documented. |
++| State history | Current phase/status files are atomic; history is append-only. | Concurrent writers could interleave without the installer lock. | Installer lock remains required. |
++| PATH validation | Security library canonicalizes PATH and rejects writable/suspicious segments unless explicitly bypassed. | Good boundary; bypass env var can leak risk into manual runs. | Documented. |
++| Runtime ownership | Runtime audit distinguishes managed/unmanaged Node/npm/codex and production policy. | Good; package manager detection remains intentionally limited to repository-supported sources. | No change. |
++| Tempdirs | Installer tempdirs use `mktemp -d` and cleanup guard. | Good; cleanup guard is conservative. | No change. |
++| Workflows | CI/release workflows pin broad Ubuntu runner labels and install apt tooling at runtime. | GitHub runner image drift remains possible. | Not modified per constraint. |
++
++## Hidden bugs and shell safety notes
++
++- `codex.sh`, `validate-release.sh`, `validate-release-tag.sh`, `validate-environment.sh`, `maintenance-setup.sh`, and `uninstall-codex.sh` had no early locale/timezone normalization before local path/log/version handling.
++- `scripts/release.sh` verified repeatability within one invocation, but its timestamp source allowed runtime drift by ref metadata.
++- No unsafe `eval` pattern was found in audited shell code.
++- Privileged execution is centralized via `runtime_privileged`, reducing duplicated `sudo` behavior.
++- Raw command discovery remains present where appropriate, but privileged `sudo` resolution is checked against trusted paths.
++
++## Validation gates
++
++- ShellCheck must cover `codex.sh`, `scripts/**/*.sh`, and `tests/**/*.bash` in deterministic path order.
++- shfmt must pass for `codex.sh`, `scripts`, `tests`, and the added reproducibility validation script.
++- Release validation must produce identical archives and matching `SHA256SUMS` across two clean output directories.
+diff --git a/reproducibility_validation.sh b/reproducibility_validation.sh
+new file mode 100755
+index 0000000..dd47143
+--- /dev/null
++++ b/reproducibility_validation.sh
+@@ -0,0 +1,56 @@
++#!/usr/bin/env bash
++# Validate that zcodex release archives rebuild byte-for-byte.
++
++set -Eeuo pipefail
++
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++VERSION_FILE="${SCRIPT_DIR}/VERSION"
++OUT_A="${OUT_A:-${SCRIPT_DIR}/dist.repro-a}"
++OUT_B="${OUT_B:-${SCRIPT_DIR}/dist.repro-b}"
++
++fail() {
++	printf '[repro] ERROR: %s\n' "$*" >&2
++	exit 1
++}
++
++require_command() {
++	command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
++}
++
++main() {
++	require_command bash
++	require_command cmp
++	require_command sha256sum
++	[[ -f "${VERSION_FILE}" ]] || fail "missing VERSION file"
++
++	local version archive_a archive_b sha_a sha_b
++	version="$(tr -d '[:space:]' <"${VERSION_FILE}")"
++	archive_a="${OUT_A}/zcodex-v${version}.tar.gz"
++	archive_b="${OUT_B}/zcodex-v${version}.tar.gz"
++
++	rm -rf "${OUT_A}" "${OUT_B}"
++	bash "${SCRIPT_DIR}/scripts/build-release.sh" --output-dir "${OUT_A}"
++	bash "${SCRIPT_DIR}/scripts/build-release.sh" --output-dir "${OUT_B}"
++
++	(
++		cd "${OUT_A}"
++		sha256sum -c SHA256SUMS
++	)
++	(
++		cd "${OUT_B}"
++		sha256sum -c SHA256SUMS
++	)
++	cmp "${archive_a}" "${archive_b}"
++
++	sha_a="$(sha256sum "${archive_a}" | awk '{ print $1 }')"
++	sha_b="$(sha256sum "${archive_b}" | awk '{ print $1 }')"
++	[[ "${sha_a}" == "${sha_b}" ]] || fail "checksum mismatch: ${sha_a} != ${sha_b}"
++	printf '[repro] OK: %s  zcodex-v%s.tar.gz\n' "${sha_a}" "${version}"
++}
++
++main "$@"
+diff --git a/root_cause_analysis.md b/root_cause_analysis.md
+new file mode 100644
+index 0000000..f5c0623
+--- /dev/null
++++ b/root_cause_analysis.md
+@@ -0,0 +1,38 @@
++# Root cause analysis
++
++Date: 2026-05-09
++
++## RC-1: Ambient process environment leaked into shell behavior
++
++- Cause: Several entry points relied on the caller's `LC_ALL`, `LANG`, and `TZ` until a runtime library was sourced, or never normalized the environment at all.
++- Impact: Locale-aware utilities could produce different ordering, class matching, and timestamps across developer machines and CI images.
++- Fix: Export `LC_ALL=C.UTF-8`, `LANG=C.UTF-8`, and `TZ=UTC` near process start in standalone entry points.
++- Prevention: Keep environment normalization in new entry points before parsing input or invoking text utilities.
++
++## RC-2: Release archive timestamp followed Git metadata
++
++- Cause: The release archive normalized tar metadata, but mtime was derived from `SOURCE_DATE_EPOCH` or the commit timestamp.
++- Impact: Rebuilding equivalent source trees from different refs or commit metadata could produce different archive hashes.
++- Fix: Use fixed release mtime `UTC 2025-01-01` in the deterministic tar invocation.
++- Prevention: Treat release artifact metadata as part of the compatibility contract.
++
++## RC-3: File traversal order depended on locale in one validation path
++
++- Cause: The Makefile lint file list used `sort -z` without an explicit C locale.
++- Impact: ShellCheck input order could differ by locale, creating noisy CI/local differences and masking traversal assumptions.
++- Fix: Use `LC_ALL=C sort -z` for the lint file list.
++- Prevention: Any `find ... -type f` pipeline must sort with `LC_ALL=C` before consumption.
++
++## RC-4: Workflow images remain a drift source
++
++- Cause: Workflows install tool packages from the current runner/apt image rather than pinned container digests.
++- Impact: ShellCheck, shfmt, bats, tar, gzip, and Python versions can drift over time.
++- Fix: Not changed because workflows were explicitly out of scope.
++- Prevention: Future workflow hardening should pin tool versions or execute validation in a repository-owned image.
++
++## RC-5: Runtime state is intentionally host-specific
++
++- Cause: Manifest and state files include runtime versions, PATH digest, command hashes, and install timestamps.
++- Impact: Runtime manifests are deterministic for a fixed host/runtime input, but not portable release artifacts.
++- Fix: No code change; release artifacts are built only from the committed Git tree.
++- Prevention: Keep runtime diagnostics separate from release reproducibility claims.
+diff --git a/scripts/maintenance-setup.sh b/scripts/maintenance-setup.sh
+index 79ee6eb..6df8f9c 100755
+--- a/scripts/maintenance-setup.sh
++++ b/scripts/maintenance-setup.sh
+@@ -3,6 +3,11 @@
+ 
+ set -Eeuo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ LIB_DIR="${SCRIPT_DIR}/lib"
+ LOG_FILE="${LOG_FILE:-/tmp/zcodex-maintenance.log}"
+diff --git a/scripts/release.sh b/scripts/release.sh
+index e7c9c80..1c579ea 100755
+--- a/scripts/release.sh
++++ b/scripts/release.sh
+@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ VERSION_FILE="${REPO_ROOT}/VERSION"
+ CHANGELOG_FILE="${REPO_ROOT}/CHANGELOG.md"
+ OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/dist}"
+-SOURCE_DATE_EPOCH_OVERRIDE="${SOURCE_DATE_EPOCH:-}"
++RELEASE_MTIME="UTC 2025-01-01"
+ SKIP_VALIDATE=0
+ CLEAN_OUTPUT=1
+ VERSION_OVERRIDE=""
+@@ -150,28 +150,10 @@ when repository signing keys, OIDC policy, and SBOM ownership are finalized.
+ SIGNING
+ }
+ 
+-release_source_date_epoch() {
+-	if [[ -n "${SOURCE_DATE_EPOCH_OVERRIDE}" ]]; then
+-		[[ "${SOURCE_DATE_EPOCH_OVERRIDE}" =~ ^[0-9]+$ ]] || fail "SOURCE_DATE_EPOCH must be an integer Unix timestamp"
+-		printf '%s\n' "${SOURCE_DATE_EPOCH_OVERRIDE}"
+-		return 0
+-	fi
+-
+-	if git -C "${REPO_ROOT}" rev-parse --verify "${GIT_REF}^{commit}" >/dev/null 2>&1; then
+-		git -C "${REPO_ROOT}" log -1 --format=%ct "${GIT_REF}"
+-		return 0
+-	fi
+-
+-	printf '%s\n' 0
+-}
+-
+ release_archive_stream() {
+ 	local version="$1"
+ 	local tag="v${version}"
+ 	local prefix="zcodex-${tag}"
+-	local epoch
+-
+-	epoch="$(release_source_date_epoch)"
+ 	(
+ 		local staging_dir
+ 		staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/zcodex-release.XXXXXX")"
+@@ -183,7 +165,7 @@ release_archive_stream() {
+ 			--sort=name \
+ 			--format=posix \
+ 			--pax-option='exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime' \
+-			--mtime="@${epoch}" \
++			--mtime="${RELEASE_MTIME}" \
+ 			--owner=0 \
+ 			--group=0 \
+ 			--numeric-owner \
+diff --git a/scripts/uninstall-codex.sh b/scripts/uninstall-codex.sh
+index 1dfad07..c8da2f7 100755
+--- a/scripts/uninstall-codex.sh
++++ b/scripts/uninstall-codex.sh
+@@ -3,6 +3,11 @@
+ 
+ set -Eeuo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ LIB_DIR="${SCRIPT_DIR}/lib"
+ LOG_FILE="${LOG_FILE:-/tmp/zcodex-uninstall.log}"
+diff --git a/scripts/validate-environment.sh b/scripts/validate-environment.sh
+index 2505f8e..0c4c0a0 100755
+--- a/scripts/validate-environment.sh
++++ b/scripts/validate-environment.sh
+@@ -3,6 +3,11 @@
+ 
+ set -Eeuo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ LIB_DIR="${SCRIPT_DIR}/lib"
+ LOG_FILE="${LOG_FILE:-/tmp/zcodex-validate.log}"
+diff --git a/scripts/validate-release-tag.sh b/scripts/validate-release-tag.sh
+index 9589b49..9e121b2 100755
+--- a/scripts/validate-release-tag.sh
++++ b/scripts/validate-release-tag.sh
+@@ -2,5 +2,10 @@
+ # Backward-compatible entry point for release tag validation.
+ set -euo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ exec "${SCRIPT_DIR}/validate-release.sh" "$@"
+diff --git a/scripts/validate-release.sh b/scripts/validate-release.sh
+index e81b4c3..f614b77 100755
+--- a/scripts/validate-release.sh
++++ b/scripts/validate-release.sh
+@@ -2,6 +2,11 @@
+ # Validate that a release tag, VERSION, and changelog form a publishable release.
+ set -euo pipefail
+ 
++export LC_ALL=C.UTF-8
++export LANG=C.UTF-8
++export TZ=UTC
++umask 022
++
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ VERSION_FILE="${REPO_ROOT}/VERSION"
+diff --git a/tests/installer.bats b/tests/installer.bats
+index e90fd92..03f6f54 100755
+--- a/tests/installer.bats
++++ b/tests/installer.bats
+@@ -625,11 +625,11 @@ JSON
+ 	version="$(tr -d '[:space:]' <"${REPO_ROOT}/VERSION")"
+ 	archive="${output_dir}/zcodex-v${version}.tar.gz"
+ 
+-	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC SOURCE_DATE_EPOCH=0 TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${output_dir}"
++	run env LC_ALL=C.UTF-8 LANG=C.UTF-8 TZ=UTC TMPDIR="${TMPDIR}" bash "${REPO_ROOT}/scripts/release.sh" --skip-validate --output-dir "${output_dir}"
+ 	[ "$status" -eq 0 ]
+ 	listing="$(tar -tvf "${archive}" | sed -n '1,5p')"
+ 	[[ "${listing}" == *" 0/0 "* ]]
+-	[[ "${listing}" == *"1970-01-01"* || "${listing}" == *"1969-12-31"* ]]
++	[[ "${listing}" == *"2025-01-01"* ]]
+ }
+ 
+ @test "workflow policy rejects Bats helpers, cache restores, and deprecated action majors" {
+diff --git a/tests/shellcheck.sh b/tests/shellcheck.sh
+index e5ba7d2..760a965 100755
+--- a/tests/shellcheck.sh
++++ b/tests/shellcheck.sh
+@@ -6,7 +6,7 @@ export LANG=C.UTF-8
+ export TZ=UTC
+ 
+ mapfile -d '' -t shell_files < <({
+-	printf '%s\0' codex.sh
++	printf '%s\0' codex.sh reproducibility_validation.sh
+ 	find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0
+ } | LC_ALL=C sort -z)
+ shellcheck "${shell_files[@]}"

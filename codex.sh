@@ -3,6 +3,11 @@
 
 set -Eeuo pipefail
 
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export TZ=UTC
+umask 022
+
 ZCODEX_RELEASE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ZCODEX_RELEASE_SCRIPT_DIR
 readonly ZCODEX_RELEASE_LIB_DIR="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/lib"
