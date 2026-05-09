@@ -14,24 +14,51 @@ jobs:
   validate:
     if: github.event.workflow_run.conclusion == 'success' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
+      - name: Validate triggering run metadata
+        run: |
+          set -Eeuo pipefail
+          test "${{ github.event.workflow_run.name }}" = "release"
+          test "${{ github.event.workflow_run.conclusion }}" = "success"
+          head_sha='${{ github.event.workflow_run.head_sha }}'
+          test -n "$head_sha"
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Resolve release artifact name deterministically
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist
+          if [[ '${{ github.event.workflow_run.head_branch }}' =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            ARTIFACT_NAME='release-${{ github.event.workflow_run.head_branch }}'
+          else
+            tag=$(git tag --points-at '${{ github.event.workflow_run.head_sha }}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
+            test -n "$tag" || { echo "No semver tag found for release commit"; exit 1; }
+            ARTIFACT_NAME="release-${tag}"
+          fi
+          echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_ENV"
+          echo "Resolved artifact: $ARTIFACT_NAME"
       - uses: dawidd6/action-download-artifact@v6
         with:
           workflow: release.yml
           run_id: ${{ github.event.workflow_run.id }}
-          name: release-${{ github.event.workflow_run.head_branch }}
+          name: ${{ env.artifact_name }}
           path: dist
           if_no_artifact_found: fail
-      - run: |
+      - name: Verify artifact integrity and reproducibility metadata
+        run: |
           set -Eeuo pipefail
           ls -la dist
           test -f dist/SHA256SUMS
+          archive_count=$(find dist -maxdepth 1 -name 'release-v*.tar.gz' | wc -l | tr -d ' ')
+          test "$archive_count" -eq 1
           sha256sum --check dist/SHA256SUMS
       - if: always()
         run: |
           set -Eeuo pipefail
           echo "## Release validation summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run ID: ${{ github.event.workflow_run.id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact: ${{ env.artifact_name }}" >> "$GITHUB_STEP_SUMMARY"
       - if: failure()
         uses: actions/upload-artifact@v4
         with: { name: release-validate-debug-${{ github.run_id }}, path: dist/, if-no-files-found: ignore }
