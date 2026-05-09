@@ -71,3 +71,10 @@ Security validation is part of the primary CI workflow and the containerized E2E
   principals are rejected before privileged work.
 - zcodex assumes `sudo` policy is already configured by the host administrator;
   it does not attempt to bypass, weaken, or configure sudoers policy.
+
+
+## Secure development workflow guardrails
+
+- Pre-commit hooks are configured in `.pre-commit-config.yaml` to block basic secret leakage patterns and enforce shell hygiene before commits.
+- Workflow policy tests enforce explicit least-privilege GitHub Actions permissions and block risky triggers/scopes.
+- Branch protection requirements are documented in `.github/branch-protection-ruleset.md` and should be enforced for `main`.
