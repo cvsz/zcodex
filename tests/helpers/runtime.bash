@@ -39,6 +39,7 @@ isolate_home() {
 setup_test_environment() {
 	export REPO_ROOT="${BATS_TEST_DIRNAME}/.."
 	normalize_locale
+	reset_path
 	isolate_tmpdir
 	isolate_home
 	export ZCODEX_INSTALL_ID="bats-${BATS_TEST_NUMBER:-0}"
@@ -53,15 +54,35 @@ teardown_test_environment() {
 	if [[ -n "${ZCODEX_TEST_WORKDIR:-}" && -d "${ZCODEX_TEST_WORKDIR}" ]]; then
 		rm -rf "${ZCODEX_TEST_WORKDIR}"
 	fi
+	reset_path
 }
 
 runtime_fixture_root() {
 	printf '%s/tests/runtime-fixtures/%s\n' "${REPO_ROOT}" "$1"
 }
 
+runtime_fixture_hostless_bin() {
+	: "${ZCODEX_TEST_WORKDIR:?setup_test_environment must run before hostless fixture injection}"
+
+	local shim_dir command_path command_name
+	shim_dir="${ZCODEX_TEST_WORKDIR}/hostless-bin"
+	mkdir -p "${shim_dir}"
+
+	for command_name in bash mkdir mktemp rm; do
+		command_path="$(PATH="${ZCODEX_TEST_SYSTEM_PATH}" command -v "${command_name}")"
+		[[ -n "${command_path}" ]] || {
+			printf 'missing required hostless shim command: %s\n' "${command_name}" >&2
+			return 1
+		}
+		ln -sf "${command_path}" "${shim_dir}/${command_name}"
+	done
+
+	printf '%s\n' "${shim_dir}"
+}
+
 runtime_fixture_inject() {
 	local fixture="$1"
-	local fixture_dir
+	local fixture_dir fixture_path
 	fixture_dir="$(runtime_fixture_root "${fixture}")"
 	[[ -d "${fixture_dir}" ]] || {
 		printf 'missing runtime fixture: %s\n' "${fixture}" >&2
@@ -69,7 +90,11 @@ runtime_fixture_inject() {
 	}
 	export ZCODEX_RUNTIME_FIXTURE="${fixture}"
 	export ZCODEX_RUNTIME_FIXTURE_DIR="${fixture_dir}"
-	export PATH="${fixture_dir}/bin:${ZCODEX_TEST_SYSTEM_PATH}"
+	fixture_path="${fixture_dir}/bin:${ZCODEX_TEST_SYSTEM_PATH}"
+	if [[ "${fixture}" == "missing-runtime" ]]; then
+		fixture_path="${fixture_dir}/bin:$(runtime_fixture_hostless_bin)"
+	fi
+	export PATH="${fixture_path}"
 }
 
 runtime_fixture_write_command() {
