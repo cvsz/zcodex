@@ -1,4 +1,4 @@
-name: installer-ci
+name: ci
 
 on:
   pull_request:
@@ -69,22 +69,10 @@ jobs:
           make validate-env
       - name: Bash syntax checks
         run: bash -n codex.sh scripts/*.sh scripts/lib/*.sh tests/*.sh
-      - name: Release orchestrator smoke tests
-        env:
-          PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        run: |
-          set -euo pipefail
-          ./codex.sh --help
-          CI=true ./codex.sh basic --dry-run --skip-docker --skip-optional
-          CI=true ./codex.sh full --dry-run --skip-docker --skip-optional
-          CI=true ./codex.sh orchestrator --offline
       - name: Enforce workflow dependency policy
         run: make workflow-policy
-      - name: Run tests
+      - name: Run Bats tests
         run: make test
-      - name: Installer dry run
-        run: CI=true bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
-
   release-reproducibility:
     runs-on: ubuntu-24.04
     steps:

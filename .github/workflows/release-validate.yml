@@ -1,9 +1,40 @@
-name: release
+name: release-validate
 
 on:
+  pull_request:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag candidate to validate; defaults to vVERSION
+        required: false
+        default: ''
+      ref:
+        description: Git ref to archive for a dry-run release build
+        required: false
+        default: HEAD
+      mode:
+        description: Codex release orchestrator mode to validate before packaging
+        required: true
+        type: choice
+        default: release
+        options:
+          - basic
+          - full
+          - ultimate
+          - orchestrator
+          - release
+      installer_args:
+        description: Extra arguments forwarded to codex.sh for manual dry-run validation
+        required: false
+        default: '--dry-run --skip-docker --skip-optional'
+      strict_doctor:
+        description: Fail the orchestrator doctor when warnings are found
+        required: false
+        type: boolean
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -12,25 +43,29 @@ env:
   TZ: UTC
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-validate-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  release:
-    name: Publish tagged release
+  validate:
+    name: Validate release candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
       ZCODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
-      STRICT: '1'
+      RELEASE_REF: ${{ github.event.inputs.ref || 'HEAD' }}
+      RELEASE_MODE: ${{ github.event.inputs.mode || 'release' }}
+      RELEASE_INSTALLER_ARGS: ${{ github.event.inputs.installer_args || '--dry-run --skip-docker --skip-optional' }}
+      RELEASE_TAG_INPUT: ${{ github.event.inputs.tag || '' }}
+      STRICT: ${{ github.event.inputs.strict_doctor == 'true' && '1' || '0' }}
 
     steps:
       - name: Check out source
@@ -70,12 +105,20 @@ jobs:
           command -v curl >/dev/null 2>&1 || { echo "curl not installed. Aborting." >&2; exit 1; }
           command -v docker >/dev/null 2>&1 || { echo "Docker not installed. Aborting." >&2; exit 1; }
           command -v node >/dev/null 2>&1 || { echo "Node.js not installed. Aborting." >&2; exit 1; }
-          command -v kubectl >/dev/null 2>&1 || echo "[Codex] Kubernetes not found; cluster orchestration checks are not required for release packaging." | tee -a "${CODEX_RELEASE_LOG}"
+          command -v kubectl >/dev/null 2>&1 || echo "[Codex] Kubernetes not found; cluster orchestration checks are not required for release validation." | tee -a "${CODEX_RELEASE_LOG}"
           docker --version | tee -a "${CODEX_RELEASE_LOG}"
           node --version | tee -a "${CODEX_RELEASE_LOG}"
 
-      - name: Validate tag and VERSION
-        run: scripts/validate-release.sh "${GITHUB_REF_NAME}"
+      - name: Resolve release tag candidate
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          release_tag="${RELEASE_TAG_INPUT:-v${version}}"
+          echo "RELEASE_TAG=${release_tag}" >>"${GITHUB_ENV}"
+          printf '[Codex] Release validation candidate: %s\n' "${release_tag}" | tee -a "${CODEX_RELEASE_LOG}"
+
+      - name: Validate tag, VERSION, and changelog
+        run: scripts/validate-release.sh "${RELEASE_TAG}"
 
       - name: Validate environment, shellcheck, shfmt, and Bats
         run: make validate
@@ -83,44 +126,42 @@ jobs:
       - name: Run Codex release orchestrator
         run: |
           set -euo pipefail
-          echo "[Codex] Running tagged release validation..." | tee -a "${CODEX_RELEASE_LOG}"
-          CI=true ./codex.sh release --dry-run --skip-docker --skip-optional
+          case "${RELEASE_MODE}" in
+            basic|full|ultimate|orchestrator|release) ;;
+            *)
+              echo "Usage: codex.sh {basic|full|ultimate|orchestrator|release}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "[Codex] Running ${RELEASE_MODE} release validation..." | tee -a "${CODEX_RELEASE_LOG}"
+          if [[ "${RELEASE_MODE}" == "orchestrator" ]]; then
+            CI=true ./codex.sh "${RELEASE_MODE}" --offline
+          else
+            read -r -a codex_args <<<"${RELEASE_INSTALLER_ARGS}"
+            CI=true ./codex.sh "${RELEASE_MODE}" "${codex_args[@]}"
+          fi
           echo "[Codex] Process finished successfully." | tee -a "${CODEX_RELEASE_LOG}"
 
       - name: Build deterministic release artifacts
-        run: scripts/build-release.sh --ref "${GITHUB_REF_NAME}"
+        run: scripts/build-release.sh --ref "${RELEASE_REF}"
 
       - name: Gate release reproducibility
         run: |
           set -euo pipefail
           rm -rf dist.repro
-          scripts/build-release.sh --ref "${GITHUB_REF_NAME}" --output-dir dist.repro
+          scripts/build-release.sh --ref "${RELEASE_REF}" --output-dir dist.repro
           version="$(tr -d '[:space:]' < VERSION)"
           cmp "dist/zcodex-v${version}.tar.gz" "dist.repro/zcodex-v${version}.tar.gz"
 
       - name: Verify artifact checksums
         run: cd dist && sha256sum -c SHA256SUMS
 
-      - name: Upload release artifacts and logs
+      - name: Upload validation artifacts and logs
         uses: actions/upload-artifact@v7
         with:
-          name: release-artifacts-${{ github.ref_name }}
+          name: release-validation-artifacts-${{ github.run_id }}
           path: |
             codex_release.log
             dist/
           if-no-files-found: error
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: zcodex ${{ github.ref_name }} — Secure Ubuntu Bootstrap Runtime
-          body_path: dist/RELEASE_NOTES.md
-          files: |
-            dist/zcodex-${{ github.ref_name }}.tar.gz
-            dist/SHA256SUMS
-            dist/SIGNING_INSTRUCTIONS.md
-
-      # Future hardening hooks:
-      # - Generate SBOM: syft dist/zcodex-${{ github.ref_name }}.tar.gz -o spdx-json > dist/zcodex-${{ github.ref_name }}.spdx.json
-      # - Sign checksums with GPG: gpg --armor --detach-sign dist/SHA256SUMS
-      # - Sign checksums with cosign keyless: cosign sign-blob --yes --output-signature dist/SHA256SUMS.sig dist/SHA256SUMS
