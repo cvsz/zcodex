@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+case " ${*} " in
+*nodejs*) printf '20.11.0-1ubuntu1' ;;
+*npm*) printf '10.2.4' ;;
+*) exit 1 ;;
+esac
