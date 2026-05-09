@@ -46,7 +46,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-validate-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -57,7 +57,7 @@ jobs:
   validate:
     name: Validate release candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       CODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log
       ZCODEX_RELEASE_LOG: ${{ github.workspace }}/codex_release.log

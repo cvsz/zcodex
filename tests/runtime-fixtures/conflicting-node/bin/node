@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-printf 'v20.11.0\n'

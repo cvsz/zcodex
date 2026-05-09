@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-printf 'v22.16.0\n'
+printf '%s\n' 'v22.16.0'

@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-printf '9.2.0\n'
+printf '%s\n' '9.2.0'

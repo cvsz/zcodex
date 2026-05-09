@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash
@@ -19,6 +23,7 @@ jobs:
   bats:
     name: bats / ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +101,7 @@ jobs:
           if-no-files-found: ignore
   release-reproducibility:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
@@ -143,6 +149,7 @@ jobs:
 
   security-audit:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:

@@ -2,10 +2,7 @@
 fresh-install	basic	--dry-run --skip-docker --skip-optional
 interrupted-recovery	basic	--dry-run --skip-docker --skip-optional
 repair-mode	orchestrator	--offline --repair
-rollback-behavior	basic	--dry-run --skip-docker --skip-optional
-runtime-conflicts	basic	--dry-run --skip-docker --skip-optional --runtime-mode developer
 manifest-reconciliation	basic	--dry-run --skip-docker --skip-optional
-release-reproducibility	release	--dry-run --skip-docker --skip-optional
-strict-policy-mode	basic	--dry-run --skip-docker --skip-optional --runtime-mode production
-developer-policy-mode	basic	--dry-run --skip-docker --skip-optional --runtime-mode developer
-ci-policy-mode	basic	--dry-run --skip-docker --skip-optional --ci
+strict-mode	basic	--dry-run --skip-docker --skip-optional --runtime-mode production
+ci-mode	basic	--dry-run --skip-docker --skip-optional --ci
+runtime-conflict-handling	basic	--dry-run --skip-docker --skip-optional --runtime-mode developer
