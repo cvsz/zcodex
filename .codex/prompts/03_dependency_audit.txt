@@ -1,0 +1,8 @@
+Audit dependencies and supply chain across npm/pnpm/yarn/pip/poetry/cargo/go/docker/system packages.
+Generate SBOM (CycloneDX when possible), vulnerable/abandoned/malicious/confusion/typosquat/duplicate/conflict/lock drift/non-determinism analysis.
+Provide upgrade plan, migration path, compatibility matrix, rollback notes.
+Add if missing: Dependabot, Renovate, signature verification, provenance attestations.
+Write:
+- .codex/security/dependency-audit.md
+- .codex/security/sbom.json
+- .codex/reports/version-conflicts.md

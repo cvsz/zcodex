@@ -1,0 +1,6 @@
+Audit/repair CI-CD: workflows, Dockerfiles, compose, Makefiles, release/deploy scripts, helm/terraform/ansible/nix/bazel/task runners.
+Detect flaky pipelines, invalid matrices, cache issues, unsafe permissions/secrets, nondeterminism, artifacts issues, missing retries/health checks/rollback.
+Add if missing: CodeQL, secret scanning, dependency review, SARIF, attestations/provenance, summaries, triage logs.
+Write:
+- .codex/ci/workflow-fixes/
+- .codex/reports/cicd-findings.md
