@@ -162,7 +162,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	rm -rf "${tmpdir}"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"old config"* ]]
-	[[ "$output" == *"model = \"gpt-5-codex\""* ]]
+	[[ "$output" == *"model = \"codex-1\""* ]]
 }
 
 @test "runtime loader exposes modular installer functions" {
@@ -228,6 +228,20 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	[ "$status" -eq 0 ]
 	[ -s "${ZCODEX_TEST_WORKDIR}/release.log" ]
 	[ ! -e "${ZCODEX_TEST_WORKDIR}/missing/ambient.log" ]
+}
+
+@test "release orchestrator rejects non-executable local scripts" {
+	local tmprepo
+	tmprepo="$(zcodex_tmpdir)/repo"
+	mkdir -p "${tmprepo}"
+	cp -a "${REPO_ROOT}/codex.sh" "${REPO_ROOT}/scripts" "${tmprepo}/"
+	chmod -x "${tmprepo}/scripts/doctor.sh"
+
+	run env -u NVM_DIR HOME="${ZCODEX_TEST_WORKDIR}/home" PATH="/usr/bin:/bin" ZCODEX_RELEASE_LOG="${ZCODEX_TEST_WORKDIR}/release.log" bash "${tmprepo}/codex.sh" basic --dry-run --skip-docker --skip-optional
+	rm -rf "${tmprepo%/repo}"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"Required script is not executable:"* ]]
+	[[ "$output" == *"Fix: chmod +x"* ]]
 }
 
 @test "release orchestrator CI dry-run treats missing host tools as advisory" {

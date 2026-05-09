@@ -177,7 +177,7 @@ A valid example installer configuration is available at [`config/zcodex/config.t
 The generated Codex config intentionally stays minimal:
 
 ```toml
-model = "gpt-5-codex"
+model = "codex-1"
 
 approval-policy = "on-request"
 sandbox-mode = "workspace-write"

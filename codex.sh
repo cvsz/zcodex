@@ -53,7 +53,6 @@ release_log_prepare() {
 
 log() {
 	local message="$1"
-	release_log_prepare
 	printf '[Codex] %s\n' "${message}" | tee -a "${ZCODEX_RELEASE_LOG_FILE}"
 }
 
@@ -61,14 +60,18 @@ run_step() {
 	local description="$1"
 	shift
 
-	release_log_prepare
-	LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" runtime_exec_logged "${ZCODEX_RELEASE_LOG_FILE}" "${description}" env LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" "$@"
+	runtime_exec_logged "${ZCODEX_RELEASE_LOG_FILE}" "${description}" env LOG_FILE="${ZCODEX_RELEASE_LOG_FILE}" "$@"
 }
 
 require_local_script() {
 	local script_path="$1"
-	if [[ ! -x "${script_path}" && ! -f "${script_path}" ]]; then
+	if [[ ! -f "${script_path}" ]]; then
 		printf 'Required script is missing: %s\n' "${script_path}" >&2
+		return 1
+	fi
+	if [[ ! -x "${script_path}" ]]; then
+		printf 'Required script is not executable: %s\n' "${script_path}" >&2
+		printf 'Fix: chmod +x %s\n' "${script_path}" >&2
 		return 1
 	fi
 }
@@ -104,6 +107,7 @@ main() {
 	fi
 	shift
 
+	release_log_prepare
 	require_local_script "${installer}"
 	require_local_script "${doctor}"
 	require_local_script "${validator}"
