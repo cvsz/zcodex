@@ -32,11 +32,13 @@ logging_init() {
 
 	logdir="$(dirname -- "${logfile}")"
 	if [[ ! -d "${logdir}" ]]; then
-		printf 'logging_init: log directory does not exist: %s\n' "${logdir}" >&2
-		return "${ZCODEX_LOG_ERR_INVALID_DEST}"
+		mkdir -p -- "${logdir}" 2>/dev/null || {
+			printf 'logging_init: log directory does not exist: %s\n' "${logdir}" >&2
+			return "${ZCODEX_LOG_ERR_INVALID_DEST}"
+		}
 	fi
 
-	touch -- "${logfile}" 2>/dev/null || {
+	: >>"${logfile}" 2>/dev/null || {
 		printf 'logging_init: log file is not writable: %s\n' "${logfile}" >&2
 		return "${ZCODEX_LOG_ERR_INVALID_DEST}"
 	}
