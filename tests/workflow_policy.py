@@ -46,18 +46,43 @@ def workflow_files(workflow_dir: Path = WORKFLOW_DIR) -> list[Path]:
     return sorted({*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml")})
 
 
+def workflow_display_path(workflow: Path) -> Path:
+    """Return a stable workflow path for policy messages."""
+    try:
+        return workflow.relative_to(REPO_ROOT)
+    except ValueError:
+        return workflow
+
+
 def find_policy_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
     """Find workflows that opt into blocked dependency/action setup paths."""
     failures: list[str] = []
     for workflow in workflow_files(workflow_dir):
         content = workflow.read_text(encoding="utf-8")
+        rel_path = workflow_display_path(workflow)
         for token in DISALLOWED_TOKENS:
             if token in content:
-                try:
-                    rel_path = workflow.relative_to(REPO_ROOT)
-                except ValueError:
-                    rel_path = workflow
                 failures.append(f"{rel_path}: disallowed Bats cache/helper token: {token}")
+
+    return failures
+
+
+def find_doctor_ci_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
+    """Find workflows missing Doctor v2 CI observability safeguards."""
+    failures: list[str] = []
+    for workflow in workflow_files(workflow_dir):
+        content = workflow.read_text(encoding="utf-8")
+        rel_path = workflow_display_path(workflow)
+        if "group: doctor-${{ github.ref }}" not in content:
+            failures.append(f"{rel_path}: missing Doctor v2 concurrency group")
+        if "cancel-in-progress: true" not in content:
+            failures.append(f"{rel_path}: missing concurrency cancellation")
+        if "timeout-minutes: 30" not in content:
+            failures.append(f"{rel_path}: missing 30 minute timeout")
+        if "scripts/doctor-ci.sh" not in content:
+            failures.append(f"{rel_path}: missing Doctor v2 CI report step")
+        if "path: .doctor/" not in content:
+            failures.append(f"{rel_path}: missing Doctor v2 report artifact upload")
 
     return failures
 
@@ -65,7 +90,10 @@ def find_policy_violations(workflow_dir: Path = WORKFLOW_DIR) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     workflow_dir = Path(args[0]) if args else WORKFLOW_DIR
-    failures = find_policy_violations(workflow_dir)
+    failures = [
+        *find_policy_violations(workflow_dir),
+        *find_doctor_ci_violations(workflow_dir),
+    ]
 
     if failures:
         print("Workflow policy violations found:", file=sys.stderr)
@@ -73,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("Workflow policy OK: CI avoids Bats helper caches and deprecated action setup.")
+    print("Workflow policy OK: CI avoids Bats helper caches, deprecated actions, and missing Doctor v2 observability gates.")
     return 0
 
 
