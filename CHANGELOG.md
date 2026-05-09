@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+### Added
+
+- Added META final release documentation package for `v0.3.0`, including migration, rollback, deployment verification, security, performance, and readiness scoring guidance.
+
 ## v0.3.0 - 2026-05-09
 
 ### Added
