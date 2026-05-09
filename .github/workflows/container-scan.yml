@@ -1,4 +1,4 @@
-name: supply-chain
+name: container-scan
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,15 +16,16 @@ defaults:
     shell: bash
 
 jobs:
-  sbom:
+  trivy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+      - name: Build image
+        run: |
+          set -euxo pipefail
+          docker build -t zcodex:test .
+      - name: Scan image
+        uses: aquasecurity/trivy-action@master
         with:
-          name: sbom
-          path: '*.spdx.json'
+          image-ref: zcodex:test

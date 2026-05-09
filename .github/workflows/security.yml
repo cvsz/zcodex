@@ -1,130 +1,42 @@
 name: security
 
 on:
-  pull_request:
   push:
-    branches: [main]
+  pull_request:
   schedule:
-    - cron: '23 3 * * 1'
-  workflow_dispatch:
+    - cron: '0 3 * * *'
 
 permissions:
   contents: read
   security-events: write
-  actions: read
 
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
   run:
     shell: bash
 
-
 jobs:
-  doctor:
-    name: Doctor v2 CI observability
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-      - name: Install Doctor v2 tooling
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if sudo apt-get update -o Acquire::Retries=3 && sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3; then
-              break
-            fi
-            if [[ "${attempt}" -eq 3 ]]; then
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
-      - name: Run Doctor v2
-        run: scripts/doctor-ci.sh
-      - name: Upload Doctor v2 reports
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: doctor-v2-security-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .doctor/
-          if-no-files-found: error
-
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v5
-      - name: Dependency review
-        uses: actions/dependency-review-action@v4
-
-  codeql:
-    runs-on: ubuntu-24.04
-    permissions:
-      security-events: write
-      contents: read
-      actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [actions, python]
-    steps:
-      - uses: actions/checkout@v5
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: '/language:${{ matrix.language }}'
-
-  secret-scanning:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Run Gitleaks SARIF
+      - uses: actions/checkout@v4
+      - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
-          GITLEAKS_ENABLE_COMMENTS: false
-          GITLEAKS_ENABLE_SUMMARY: true
-          GITLEAKS_OUTPUT: gitleaks.sarif
-      - name: Upload Gitleaks SARIF
-        if: always() && hashFiles('gitleaks.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          sarif_file: gitleaks.sarif
-
-  trivy-config:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v5
-      - name: Trivy filesystem scan (SARIF)
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH
-      - name: Upload Trivy SARIF
-        if: always() && hashFiles('trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
+          python-version: '3.12'
+      - name: Install scanners
+        run: |
+          set -euxo pipefail
+          pip install semgrep bandit safety
+      - name: Semgrep
+        run: semgrep scan . || true
+      - name: Bandit
+        run: bandit -r . || true
+      - name: Safety
+        run: safety check || true

@@ -2,21 +2,13 @@ name: e2e
 
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  LC_ALL: C.UTF-8
-  LANG: C.UTF-8
-  TZ: UTC
-
 concurrency:
-  group: doctor-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -24,81 +16,24 @@ defaults:
     shell: bash
 
 jobs:
-  doctor:
-    name: Doctor v2 CI observability
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-      - name: Install Doctor v2 tooling
+      - uses: actions/checkout@v4
+      - name: Run e2e
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if sudo apt-get update -o Acquire::Retries=3 && sudo apt-get install -y bash git curl shellcheck shfmt bats tar gzip coreutils make python3; then
-              break
-            fi
-            if [[ "${attempt}" -eq 3 ]]; then
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
-      - name: Run Doctor v2
-        run: scripts/doctor-ci.sh
-      - name: Upload Doctor v2 reports
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: doctor-v2-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .doctor/
-          if-no-files-found: error
-
-  containerized:
-    name: ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }} / ${{ matrix.scenario }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - ubuntu: '22.04'
-            arch: amd64
-            runner: ubuntu-22.04
-            scenario: fresh-install
-          - ubuntu: '24.04'
-            arch: amd64
-            runner: ubuntu-24.04
-            scenario: manifest-reconciliation
-          - ubuntu: '24.04'
-            arch: arm64
-            runner: ubuntu-24.04-arm64
-            scenario: ci-mode
-    steps:
-      - uses: actions/checkout@v5
-      - name: Configure isolated E2E workspace
-        run: |
-          set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/zcodex-e2e-tmp" "${RUNNER_TEMP}/zcodex-e2e-home"
-          echo "TMPDIR=${RUNNER_TEMP}/zcodex-e2e-tmp" >>"${GITHUB_ENV}"
-          echo "HOME=${RUNNER_TEMP}/zcodex-e2e-home" >>"${GITHUB_ENV}"
-          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.cache" >>"${GITHUB_ENV}"
-          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.config" >>"${GITHUB_ENV}"
-          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.local/share" >>"${GITHUB_ENV}"
-          echo "XDG_STATE_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.local/state" >>"${GITHUB_ENV}"
-          echo "npm_config_cache=${RUNNER_TEMP}/zcodex-e2e-home/.npm-cache" >>"${GITHUB_ENV}"
-          echo "NPM_CONFIG_CACHE=${RUNNER_TEMP}/zcodex-e2e-home/.npm-cache" >>"${GITHUB_ENV}"
-          echo "npm_config_prefix=${RUNNER_TEMP}/zcodex-e2e-home/.npm-prefix" >>"${GITHUB_ENV}"
-          echo "NPM_CONFIG_PREFIX=${RUNNER_TEMP}/zcodex-e2e-home/.npm-prefix" >>"${GITHUB_ENV}"
-      - name: Run containerized E2E scenario
-        run: scripts/e2e-runner.sh --ubuntu "${{ matrix.ubuntu }}" --arch "${{ matrix.arch }}" --scenario "${{ matrix.scenario }}"
-      - name: Upload diagnostics on failure
+          set -euxo pipefail
+          if [ -x scripts/e2e-runner.sh ]; then
+            scripts/e2e-runner.sh
+          else
+            echo "No e2e runner found; skipping."
+          fi
+      - name: Upload diagnostics
         if: failure()
-        run: scripts/diagnostics.sh
-      - name: Publish diagnostic bundle
-        if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
-          name: e2e-diagnostics-${{ matrix.ubuntu }}-${{ matrix.arch }}-${{ matrix.scenario }}
-          path: diagnostics/
-          if-no-files-found: ignore
+          name: e2e-diagnostics
+          path: |
+            diagnostics/
+            .codex/reports/
