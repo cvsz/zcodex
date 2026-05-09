@@ -1,0 +1,69 @@
+name: e2e
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  TZ: UTC
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  containerized:
+    name: ubuntu-${{ matrix.ubuntu }} / ${{ matrix.arch }} / ${{ matrix.scenario }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ubuntu: '22.04'
+            arch: amd64
+            runner: ubuntu-22.04
+            scenario: fresh-install
+          - ubuntu: '24.04'
+            arch: amd64
+            runner: ubuntu-24.04
+            scenario: release-reproducibility
+          - ubuntu: '24.04'
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            scenario: ci-policy-mode
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure isolated E2E workspace
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/zcodex-e2e-tmp" "${RUNNER_TEMP}/zcodex-e2e-home"
+          echo "TMPDIR=${RUNNER_TEMP}/zcodex-e2e-tmp" >>"${GITHUB_ENV}"
+          echo "HOME=${RUNNER_TEMP}/zcodex-e2e-home" >>"${GITHUB_ENV}"
+          echo "XDG_CACHE_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.cache" >>"${GITHUB_ENV}"
+          echo "XDG_CONFIG_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.config" >>"${GITHUB_ENV}"
+          echo "XDG_DATA_HOME=${RUNNER_TEMP}/zcodex-e2e-home/.local/share" >>"${GITHUB_ENV}"
+      - name: Run containerized E2E scenario
+        run: scripts/e2e-runner.sh --ubuntu "${{ matrix.ubuntu }}" --arch "${{ matrix.arch }}" --scenario "${{ matrix.scenario }}"
+      - name: Upload diagnostics on failure
+        if: failure()
+        run: scripts/diagnostics.sh
+      - name: Publish diagnostic bundle
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-diagnostics-${{ matrix.ubuntu }}-${{ matrix.arch }}-${{ matrix.scenario }}
+          path: diagnostics/
+          if-no-files-found: ignore

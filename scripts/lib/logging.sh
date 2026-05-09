@@ -29,7 +29,7 @@ log_write() {
 	shift
 	local message="$*"
 	local timestamp
-	timestamp="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+	timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 	printf '[%s] [%s] %s\n' "${timestamp}" "${level}" "${message}" >>"${LOG_FILE}"
 	printf '%s\n' "${message}" >&2
 }
@@ -39,3 +39,25 @@ log_success() { log_write OK "${LOG_COLOR_GREEN}[OK]${LOG_COLOR_RESET} $*"; }
 log_warn() { log_write WARN "${LOG_COLOR_YELLOW}[WARN]${LOG_COLOR_RESET} $*"; }
 log_error() { log_write ERROR "${LOG_COLOR_RED}[ERROR]${LOG_COLOR_RESET} $*"; }
 log_section() { log_write SECTION "${LOG_COLOR_BOLD}${LOG_COLOR_CYAN}== $* ==${LOG_COLOR_RESET}"; }
+
+log_json_escape() {
+	local value="$1"
+	value="${value//\\/\\\\}"
+	value="${value//\"/\\\"}"
+	value="${value//$'\n'/\\n}"
+	value="${value//$'\r'/\\r}"
+	value="${value//$'\t'/\\t}"
+	printf '%s' "${value}"
+}
+
+log_json() {
+	local level="$1"
+	shift
+	local message="$*"
+	local timestamp
+	timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	printf '{"timestamp":"%s","level":"%s","message":"%s"}\n' \
+		"${timestamp}" \
+		"$(log_json_escape "${level}")" \
+		"$(log_json_escape "${message}")"
+}

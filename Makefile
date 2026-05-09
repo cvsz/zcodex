@@ -6,7 +6,7 @@ export LANG := C.UTF-8
 export TZ := UTC
 export TMPDIR ?= /tmp
 
-.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test doctor validate ci-local release release-checksum release-reproducible
+.PHONY: install deps-dev validate-env lint fmt fmt-check workflow-policy test e2e-dry-run doctor diagnostics validate ci-local release release-checksum release-reproducible
 
 install:
 	bash scripts/install-codex-ubuntu.sh
@@ -18,7 +18,7 @@ validate-env:
 	bash -c '. scripts/lib/dependencies.sh; validate_required_tooling'
 
 lint:
-	{ printf '%s\0' codex.sh; find scripts tests -type f -name '*.sh' -print0 | sort -z; } | xargs -0 shellcheck
+	{ printf '%s\0' codex.sh; find scripts tests -type f \( -name '*.sh' -o -name '*.bash' \) -print0 | sort -z; } | xargs -0 shellcheck
 
 fmt:
 	shfmt -w codex.sh scripts tests
@@ -32,10 +32,18 @@ workflow-policy:
 test:
 	bats tests
 
+e2e-dry-run:
+	bash scripts/e2e-runner.sh --dry-run --ubuntu 22.04 --arch amd64
+	bash scripts/e2e-runner.sh --dry-run --ubuntu 24.04 --arch arm64
+
+
 doctor:
 	bash scripts/doctor.sh
 
-validate: validate-env lint fmt-check workflow-policy test
+diagnostics:
+	bash scripts/diagnostics.sh
+
+validate: validate-env lint fmt-check workflow-policy test e2e-dry-run
 
 ci-local: validate
 	bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional

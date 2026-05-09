@@ -63,3 +63,9 @@ Release artifacts are generated from a committed git tree with `git archive` and
 `gzip -n`. The release script builds the archive twice and compares SHA-256
 hashes before publishing `SHA256SUMS`. Signing and SBOM hooks are intentionally
 prepared but not enabled until repository key ownership is finalized.
+
+## Deterministic runtime hardening layer
+
+The runtime now normalizes `LC_ALL=C.UTF-8`, `LANG=C.UTF-8`, and `TZ=UTC` through `scripts/lib/environment.sh` before installer libraries are loaded. Security-sensitive tests inject explicit runtime fixtures from `tests/runtime-fixtures/` instead of relying on host Node.js, npm, Docker, Codex, or `dpkg-query` state. CI and E2E workflows create isolated HOME, TMPDIR, and XDG directories before invoking repository code.
+
+Failure investigation should use `scripts/diagnostics.sh`, which writes a deterministic JSON runtime snapshot and normalized tar/gzip failure bundle suitable for CI artifact upload.
