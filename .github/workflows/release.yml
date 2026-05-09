@@ -23,9 +23,17 @@ jobs:
       - run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo 'invalid tag'; exit 1; }
+          git rev-parse --verify "refs/tags/${GITHUB_REF_NAME}" >/dev/null
           test -z "$(git status --porcelain)"
       - uses: actions/setup-node@v4
-        with: { node-version: '22.15.0', cache: npm, cache-dependency-path: package-lock.json }
+        with: { node-version: '22.15.0' }
+      - uses: actions/cache@v4
+        if: hashFiles('package-lock.json') != ''
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}-v3
+          restore-keys: |
+            ${{ runner.os }}-npm-
       - run: |
           set -Eeuo pipefail
           if [ -f package-lock.json ]; then npm ci --ignore-scripts; fi

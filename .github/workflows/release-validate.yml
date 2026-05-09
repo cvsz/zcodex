@@ -12,7 +12,7 @@ defaults:
   run: { shell: bash }
 jobs:
   validate:
-    if: github.event.workflow_run.conclusion == 'success' && github.actor != 'github-actions[bot]'
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -23,19 +23,19 @@ jobs:
           test "${{ github.event.workflow_run.conclusion }}" = "success"
           head_sha='${{ github.event.workflow_run.head_sha }}'
           test -n "$head_sha"
+          test '${{ github.event.workflow_run.event }}' = 'push'
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0, persist-credentials: false }
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Resolve release artifact name deterministically
         run: |
           set -Eeuo pipefail
           mkdir -p dist
-          if [[ '${{ github.event.workflow_run.head_branch }}' =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            ARTIFACT_NAME='release-${{ github.event.workflow_run.head_branch }}'
-          else
-            tag=$(git tag --points-at '${{ github.event.workflow_run.head_sha }}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)
-            test -n "$tag" || { echo "No semver tag found for release commit"; exit 1; }
-            ARTIFACT_NAME="release-${tag}"
-          fi
+          tag=$(git tag --points-at '${{ github.event.workflow_run.head_sha }}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort | head -n1 || true)
+          test -n "$tag" || { echo "No semver tag found for release commit"; exit 1; }
+          ARTIFACT_NAME="release-${tag}"
           echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_ENV"
           echo "Resolved artifact: $ARTIFACT_NAME"
       - uses: dawidd6/action-download-artifact@v6
