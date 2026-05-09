@@ -30,6 +30,7 @@ workflow-policy:
 	python3 tests/workflow_policy.py
 
 test:
+	bash -c ". scripts/lib/dependencies.sh; require_command bats || exit 1"
 	bats tests
 
 e2e-dry-run:
