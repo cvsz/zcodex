@@ -1,0 +1,161 @@
+# Example zcodex installer configuration.
+# Copy to ~/.config/zcodex/config.toml before running the installer.
+
+[installer]
+version = "0.3.0"
+channel = "stable"
+strict_mode = false
+dry_run = false
+repair_mode = true
+verify_checksums = true
+verify_tls = true
+lock_timeout_seconds = 30
+log_level = "info"
+
+[platform]
+supported = ["ubuntu-22.04", "ubuntu-24.04"]
+require_systemd = true
+require_apt = true
+allow_wsl = true
+allow_container = true
+
+[runtime]
+environment_mode = "developer"
+state_dir = "~/.local/share/zcodex/state"
+manifest_path = "~/.local/share/zcodex/manifest.json"
+workspace_dir = "~/.cache/zcodex"
+backup_dir = "~/.local/share/zcodex/backups"
+
+[runtime.nodejs]
+manager = "system"
+version = "22"
+allow_nvm = false
+allow_asdf = false
+enforce_single_runtime = true
+verify_binary_path = true
+
+[runtime.docker]
+enabled = true
+version = "ubuntu-candidate"
+rootless = false
+install_compose_plugin = true
+
+[runtime.codex]
+version = "0.129.0"
+install_method = "npm-global"
+verify_after_install = true
+
+[security]
+https_only = true
+enforce_sha256 = true
+secure_temp_dirs = true
+restrict_world_writable_path = false
+require_signed_artifacts = false
+allow_untrusted_mirrors = false
+
+[security.permissions]
+warn_on_world_writable_path = true
+fail_on_world_writable_path = false
+
+[downloads]
+retry_attempts = 3
+retry_delay_seconds = 2
+connect_timeout_seconds = 10
+max_time_seconds = 300
+
+[state_machine]
+enabled = true
+persist_state = true
+resume_interrupted = true
+fail_on_unknown_state = true
+
+[state_machine.phases]
+validate = true
+download = true
+verify = true
+install = true
+configure = true
+verify_runtime = true
+complete = true
+
+[doctor]
+strict = false
+fail_on_warning = false
+show_environment = true
+show_versions = true
+show_capabilities = true
+
+[logging]
+structured = false
+timestamps = true
+colors = true
+write_file = true
+log_file = "/tmp/zcodex-install.log"
+
+[ci]
+noninteractive = true
+skip_prompts = true
+fail_fast = true
+
+[developer]
+allow_existing_node_runtime = false
+allow_mixed_package_managers = false
+allow_path_shadowing = false
+warn_on_runtime_conflicts = true
+
+[custom_instructions]
+description = "Optional release orchestrator script retained as valid TOML data."
+shell = '''#!/bin/bash
+set -euo pipefail
+# ============================================================
+# Codex Master Full Meta Final Release
+# Unified installer & orchestrator for all environments
+# ============================================================
+
+set -e
+
+MODE=${1:?Usage: codex.sh {basic|full|ultimate|orchestrator|release}}
+LOGFILE="${ZCODEX_RELEASE_LOG:-${TMPDIR:-/tmp}/zcodex/codex_release.log}"
+mkdir -p "$(dirname "${LOGFILE}")"
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+export TZ="${TZ:-Etc/UTC}"
+
+# --- Environment Validation ---
+echo "[Codex] Validating environment..." | tee -a "${LOGFILE}"
+command -v docker >/dev/null 2>&1 || echo "[Codex] Warning: Docker not found; installer will handle Docker according to selected flags." | tee -a "${LOGFILE}"
+command -v node >/dev/null 2>&1 || echo "[Codex] Warning: Node.js not found; installer can install it on supported Ubuntu hosts." | tee -a "${LOGFILE}"
+command -v kubectl >/dev/null 2>&1 || echo "[Codex] Warning: Kubernetes not found, skipping cluster orchestration." | tee -a "${LOGFILE}"
+
+# --- Mode Selection ---
+case "${MODE}" in
+  basic)
+    echo "[Codex] Running Basic Installation..." | tee -a "${LOGFILE}"
+    bash install.sh | tee -a "${LOGFILE}"
+    ;;
+  full)
+    echo "[Codex] Running Full-stack Installation..." | tee -a "${LOGFILE}"
+    bash install_full.sh | tee -a "${LOGFILE}"
+    ;;
+  ultimate)
+    echo "[Codex] Running Ultimate Deployment..." | tee -a "${LOGFILE}"
+    bash install_ultimate.sh | tee -a "${LOGFILE}"
+    ;;
+  orchestrator)
+    echo "[Codex] Running Master Orchestrator..." | tee -a "${LOGFILE}"
+    bash master-orchestrator.sh | tee -a "${LOGFILE}"
+    ;;
+  release)
+    echo "[Codex] Executing Final Release Workflow..." | tee -a "${LOGFILE}"
+    bash install_ultimate.sh | tee -a "${LOGFILE}"
+    bash master-orchestrator.sh | tee -a "${LOGFILE}"
+    echo "[Codex] Release build complete. Artifacts logged in ${LOGFILE}"
+    ;;
+  *)
+    echo "Usage: codex.sh {basic|full|ultimate|orchestrator|release}"
+    exit 1
+    ;;
+esac
+
+echo "[Codex] Process finished successfully." | tee -a "${LOGFILE}"
+'''
