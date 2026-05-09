@@ -24,6 +24,9 @@ setup_test_environment() {
 	export ZCODEX_TMP_DIR="${ZCODEX_TEST_WORKDIR}/runtime-tmp"
 	export ZCODEX_INSTALL_ID="bats-${BATS_TEST_NUMBER:-0}"
 	export ZCODEX_TEST_SYSTEM_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	# Keep release-log tests deterministic even when the caller exports
+	# production-oriented log overrides into the Bats environment.
+	unset ZCODEX_RELEASE_LOG LOG_FILE
 	mkdir -p "${TMPDIR}" "${HOME}" "${XDG_CACHE_HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${XDG_STATE_HOME}" "${ZCODEX_STATE_DIR}" "${ZCODEX_TMP_DIR}"
 	runtime_fixture_inject clean-system
 }
