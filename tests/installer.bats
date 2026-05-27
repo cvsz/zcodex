@@ -385,7 +385,7 @@ assert data["custom_instructions"]["shell"].startswith("#!/bin/bash")
 	rm -rf "${tmprepo%/repo}"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"Required script is not executable:"* ]]
-	[[ "$output" == *"Fix: chmod +x"* ]]
+	[[ "$output" == *"Fix with: chmod +x"* ]]
 }
 
 @test "release orchestrator CI dry-run treats missing host tools as advisory" {

@@ -50,7 +50,7 @@ validate: validate-env lint fmt-check workflow-policy test e2e-dry-run
 
 ci-local: validate
 	bash scripts/install-codex-ubuntu.sh --dry-run --skip-docker --skip-optional
-	scripts/release.sh --skip-validate
+	bash scripts/release.sh --skip-validate
 
 release:
 	bash scripts/release.sh
@@ -65,4 +65,4 @@ release-reproducible:
 	rm -rf dist.repro-a dist.repro-b
 	bash scripts/build-release.sh --output-dir dist.repro-a
 	bash scripts/build-release.sh --output-dir dist.repro-b
-	cmp dist.repro-a/zcodex-v$$(tr -d '[:space:]' < VERSION).tar.gz dist.repro-b/zcodex-v$$(tr -d '[:space:]' < VERSION).tar.gz
+	cmp dist.repro-a/zcodex-v$$(tr -d '\n' < VERSION).tar.gz dist.repro-b/zcodex-v$$(tr -d '\n' < VERSION).tar.gz
