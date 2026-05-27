@@ -52,6 +52,7 @@ release_log_prepare() {
 			"${ZCODEX_RELEASE_LOG_FILE}" \
 			"${fallback_log}"
 		ZCODEX_RELEASE_LOG_FALLBACK_WARNED=true
+		readonly ZCODEX_RELEASE_LOG_FALLBACK_WARNED
 	fi
 	ZCODEX_RELEASE_LOG_FILE="${fallback_log}"
 }
@@ -76,7 +77,7 @@ require_local_script() {
 	fi
 	if [[ ! -x "${script_path}" ]]; then
 		printf 'Required script is not executable: %s\n' "${script_path}" >&2
-		printf 'Fix: chmod +x %s\n' "${script_path}" >&2
+		printf 'Fix with: chmod +x %s\n' "${script_path}" >&2
 		return 1
 	fi
 }
@@ -101,6 +102,7 @@ validate_orchestrator_environment() {
 }
 
 main() {
+	release_log_prepare
 	local mode="${1:-}"
 	local installer="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/install-codex-ubuntu.sh"
 	local doctor="${ZCODEX_RELEASE_SCRIPT_DIR}/scripts/doctor.sh"
@@ -112,7 +114,6 @@ main() {
 	fi
 	shift
 
-	release_log_prepare
 	require_local_script "${installer}"
 	require_local_script "${doctor}"
 	require_local_script "${validator}"
