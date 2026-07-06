@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Security primitives for PATH validation, tempfiles, locking, checksums, and downloads.
-
-: "${ZCODEX_TMP_DIR:=}"
-: "${ZCODEX_SECURE_PATH:=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
-: "${ZCODEX_ALLOW_INSECURE_PATH:=false}"
+# Note: Constants are loaded by runtime.sh before this file is sourced.
 
 security_path_split() {
 	local path_value="$1"

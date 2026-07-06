@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Install state tracking for resumable and repair-aware zcodex operations.
-
-: "${ZCODEX_STATE_HOME:=${HOME}/.local/share/zcodex}"
-: "${ZCODEX_STATE_DIR:=${ZCODEX_STATE_HOME}/state}"
-: "${ZCODEX_INSTALL_ID:=}"
+# Note: Constants are loaded by runtime.sh before this file is sourced.
 
 state_home_default() {
 	printf '%s\n' "${ZCODEX_STATE_HOME}"

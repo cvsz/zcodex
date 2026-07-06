@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Machine-readable installation manifest helpers.
-
-: "${ZCODEX_STATE_HOME:=${HOME}/.local/share/zcodex}"
-: "${ZCODEX_MANIFEST_FILE:=${ZCODEX_STATE_HOME}/manifest.json}"
-: "${ZCODEX_MANIFEST_SCHEMA_VERSION:=2}"
-: "${ZCODEX_INSTALL_RECORDS_FILE:=${ZCODEX_STATE_HOME}/install-records.jsonl}"
+# Note: Constants are loaded by runtime.sh before this file is sourced.
 
 manifest_command_exists() {
 	if declare -F command_exists >/dev/null 2>&1; then
