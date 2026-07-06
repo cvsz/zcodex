@@ -1,18 +1,6 @@
 #!/usr/bin/env bash
 # Installer orchestration helpers for the zcodex Ubuntu bootstrapper.
-
-: "${SCRIPT_NAME:=$(basename "$0")}"
-: "${CI_MODE:=${CI:-false}}"
-: "${SKIP_DOCKER:=false}"
-: "${SKIP_OPTIONAL:=false}"
-: "${DRY_RUN:=false}"
-: "${LOCK_FILE:=/tmp/zcodex-install.lock}"
-: "${LOG_FILE:=/tmp/zcodex-install.log}"
-: "${INSTALLER_PREVIOUS_PHASE:=}"
-: "${INSTALLER_STATE_STARTED:=false}"
-: "${ZCODEX_ROLLBACK_ON_FAILURE:=true}"
-: "${ZCODEX_RUNTIME_MODE:=clean-system}"
-: "${ZCODEX_CI_TRUSTED_PATH:=/usr/sbin:/usr/bin:/sbin:/bin}"
+# Note: Constants are loaded by runtime.sh before this file is sourced.
 
 installer_usage() {
 	cat <<USAGE

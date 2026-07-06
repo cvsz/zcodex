@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Shared structured logging helpers.
-
-: "${CI_MODE:=${CI:-false}}"
-: "${LOG_FILE:=/tmp/zcodex-install.log}"
+# Note: Constants are loaded by runtime.sh before this file is sourced.
 
 LOG_COLOR_RED=''
 LOG_COLOR_GREEN=''

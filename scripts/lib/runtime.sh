@@ -8,6 +8,10 @@ runtime_lib_dir() {
 
 ZCODEX_RUNTIME_LIB_DIR="${ZCODEX_RUNTIME_LIB_DIR:-$(runtime_lib_dir)}"
 
+# Load constants first to establish configuration defaults
+# shellcheck source=scripts/lib/constants.sh
+. "${ZCODEX_RUNTIME_LIB_DIR}/constants.sh"
+
 # shellcheck source=scripts/lib/environment.sh
 . "${ZCODEX_RUNTIME_LIB_DIR}/environment.sh"
 # shellcheck source=scripts/lib/exec.sh
