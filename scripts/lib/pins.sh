@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Deterministic version pins for zcodex-managed runtime dependencies.
 
-: "${ZCODEX_INSTALLER_VERSION:=0.3.0}"
+: "${ZCODEX_INSTALLER_VERSION:=0.5.0}"
 : "${ZCODEX_NODEJS_VERSION:=22}"
 : "${ZCODEX_NODEJS_PACKAGE_VERSION:=}"
 : "${ZCODEX_DOCKER_PACKAGE_VERSION:=}"
 : "${ZCODEX_DOCKER_COMPOSE_PACKAGE_VERSION:=}"
-: "${ZCODEX_CODEX_CLI_VERSION:=0.129.0}"
+: "${ZCODEX_CODEX_CLI_VERSION:=0.142.5}"
 
 pins_validate_semver_or_major() {
 	local value="$1"

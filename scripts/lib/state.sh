@@ -41,7 +41,9 @@ state_atomic_write() {
 	local content="$2"
 	local target_dir tmp
 	target_dir="$(dirname "${target}")"
-	install -d -m 700 "${target_dir}"
+	if [[ ! -d "${target_dir}" ]]; then
+		install -d -m 700 "${target_dir}"
+	fi
 	tmp="$(mktemp "${target_dir}/.$(basename "${target}").XXXXXX")"
 	printf '%s\n' "${content}" >"${tmp}"
 	chmod 600 "${tmp}"

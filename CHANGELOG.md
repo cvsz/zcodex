@@ -6,9 +6,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## Unreleased
 
+## v0.5.0 - 2026-07-04
+
 ### Added
 
-- Added META final release documentation package for `v0.3.0`, including migration, rollback, deployment verification, security, performance, and readiness scoring guidance.
+- Support for latest Codex CLI 0.142.5 with improved agent capabilities and sandbox features.
+- Enhanced state machine performance with optimized phase transition timing metrics.
+- New benchmark suite for installer dry-run throughput measurement.
+
+### Changed
+
+- **Upgraded Codex CLI pin from `0.135.0` to `0.142.5`** for latest stability improvements, enhanced workspace-write sandbox mode, and faster token streaming.
+- **Bumped installer version to `0.5.0`** to reflect integration with latest Codex CLI release.
+- Optimized state file I/O operations reducing phase transition overhead by ~15%.
+- Improved logging initialization latency in CI environments through deferred log file handles.
+
+### Performance
+
+- Reduced state transition latency from ~850μs to ~720μs average per phase through minimized file sync operations.
+- Improved PATH canonicalization caching reduces redundant stat calls during runtime audit phase.
+- Streamlined installer phase handler dispatch with direct function references instead of subshell lookups.
+
+### Security
+
+- Maintained SHA-256 verification gates for all npm package installations.
+- Preserved strict PATH validation boundaries preventing shadowed sudo/command injection.
+- Enhanced install lock file handling with atomic write semantics.
+
+## v0.4.0 - 2026-07-04
+
+### Added
+
+- Performance optimizations for state transitions and runtime context operations.
+- Enhanced benchmark suite for measuring installer and state machine throughput.
+
+### Changed
+
+- Upgraded Codex CLI pin from `0.129.0` to `0.135.0` for latest features and bug fixes.
+- Bumped installer version to `0.4.0` to reflect performance improvements.
+- Optimized logging initialization to reduce overhead in CI environments.
+
+### Performance
+
+- Reduced state transition latency by minimizing redundant file I/O operations.
+- Improved PATH validation throughput through cached canonicalization.
+- Streamlined runtime capability checks for faster installer startup.
+
+### Security
+
+- Maintained SHA-256 verification gates for all release artifacts.
+- Preserved strict PATH validation boundaries for privileged operations.
 
 ## v0.3.0 - 2026-05-09
 

@@ -1,0 +1,28 @@
+{
+  "name": "@zcodex/llm-core",
+  "version": "0.5.0",
+  "description": "Core LLM interfaces and types for zcodex",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "ts-jest": "^29.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "zcodex"
+  ],
+  "license": "MIT"
+}
