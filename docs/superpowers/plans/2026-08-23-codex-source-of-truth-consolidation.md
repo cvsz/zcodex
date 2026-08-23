@@ -19,7 +19,7 @@
 - Never push upstream updates directly to `main`, force-push, or silently resolve conflicts.
 - Treat upstream content as untrusted until repository identity, commit reachability, path containment, and licenses pass validation.
 - Retain upstream license files and record repository, branch, commit SHA, and license metadata.
-- Local modifications belong under `integration/patches/<component>/` or `integration/compatibility/`, never as undocumented subtree edits.
+- Local modifications belong under `integration/patches/{component}/` or `integration/compatibility/`, never as undocumented subtree edits.
 - Linux and Windows update entry points must implement the same contract.
 - Each component import is a separate reviewable commit/PR.
 - No release is valid unless manifest, provenance, integration, security, reproducibility, and license gates pass.
@@ -65,7 +65,7 @@
 
 - [ ] **Step 1: Write failing Bats coverage**
 
-Create tests asserting the canonical manifest validates, an unapproved GitHub URL fails with `repository is not allowlisted`, `../` in a prefix fails with `prefix must be components/<name>`, and a non-40-character lowercase hexadecimal commit fails.
+Create tests asserting the canonical manifest validates, an unapproved GitHub URL fails with `repository is not allowlisted`, `../` in a prefix fails with `prefix must be components/{name}`, and a non-40-character lowercase hexadecimal commit fails.
 
 - [ ] **Step 2: Run the focused test**
 
@@ -74,7 +74,7 @@ Expected: FAIL because `scripts/upstream/manifest.py` does not exist.
 
 - [ ] **Step 3: Add the manifest and validator**
 
-Make `UPSTREAMS.yaml` JSON syntax so it remains valid YAML 1.2 and can be parsed with Python's `json` module without a new dependency. Initialize all four entries with their allowlisted URL, tracked default branch verified at import time, exact prefix, 40-zero placeholder commit, license fields, empty patch list, and `update_policy: pull_request`. The validator must reject the zero commit outside the explicit `--allow-unimported` bootstrap mode.
+Make `UPSTREAMS.yaml` JSON syntax so it remains valid YAML 1.2 and can be parsed with Python's `json` module without a new dependency. Initialize all four entries with their allowlisted URL, tracked default branch verified at import time, exact prefix, the explicit string `UNIMPORTED`, license fields, empty patch list, and `update_policy: pull_request`. The validator must reject `UNIMPORTED` outside the explicit `--allow-unimported` bootstrap mode.
 
 - [ ] **Step 4: Add schema and Make target**
 
@@ -229,11 +229,242 @@ git commit -m "feat(upstream): add safe cross-platform synchronization"
 
 - [ ] **Step 1: Record immutable candidate SHAs**
 
-Run `git ls-remote <allowlisted-url> refs/heads/<tracked-branch>` for each component. Record the exact 40-character SHA before importing. Verify each commit with the update command's reachability check.
+For each manifest entry, load `repository` and `branch`, then run `git ls-remote "$repository" "refs/heads/$branch"`. Export the returned values as `CODEX_SHA`, `SKILLS_SHA`, `PLUGINS_SHA`, and `CODEX_UNIVERSAL_SHA`; require each value to match `^[0-9a-f]{40}# Codex Source-of-Truth Consolidation Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make `cvsz/zcodex` a reproducible integration source of truth containing pinned, attributable Git-subtree imports of the four public OpenAI Codex repositories.
+
+**Architecture:** Preserve the current repository as the integration/control plane and isolate upstream sources below `components/`. A JSON-compatible YAML manifest drives fail-closed validation, provenance checks, cross-platform update commands, CI, and release inventory; upstream changes always enter through reviewable branches and pull requests.
+
+**Tech Stack:** Git subtrees, Bash 4+, PowerShell 7+, Python 3 standard library, Bats, GitHub Actions, existing ShellCheck/shfmt/release tooling.
+
+**Spec:** `docs/superpowers/specs/2026-08-23-codex-source-of-truth-design.md`
+
+## Global Constraints
+
+- Preserve all existing root-level assets and Git history.
+- Track only `https://github.com/openai/codex.git`, `https://github.com/openai/skills.git`, `https://github.com/openai/plugins.git`, and `https://github.com/openai/codex-universal.git`.
+- Import into `components/codex`, `components/skills`, `components/plugins`, and `components/codex-universal`.
+- Use Git subtrees; do not use submodules or flatten upstream files into the root.
+- Never push upstream updates directly to `main`, force-push, or silently resolve conflicts.
+- Treat upstream content as untrusted until repository identity, commit reachability, path containment, and licenses pass validation.
+- Retain upstream license files and record repository, branch, commit SHA, and license metadata.
+- Local modifications belong under `integration/patches/{component}/` or `integration/compatibility/`, never as undocumented subtree edits.
+- Linux and Windows update entry points must implement the same contract.
+- Each component import is a separate reviewable commit/PR.
+- No release is valid unless manifest, provenance, integration, security, reproducibility, and license gates pass.
+
+---
+
+## File Map
+
+- `UPSTREAMS.yaml`: JSON-compatible YAML manifest containing pinned upstream identity and policy.
+- `schemas/upstreams.schema.json`: exact manifest contract.
+- `scripts/upstream/manifest.py`: standard-library manifest loader and validator.
+- `scripts/upstream/check_tree.py`: path containment, symlink, license, and provenance validation.
+- `scripts/upstream/update.sh`: Linux/macOS prepare/check/import/update entry point.
+- `scripts/upstream/update.ps1`: Windows PowerShell contract-equivalent entry point.
+- `scripts/upstream/source_inventory.py`: deterministic release inventory generator.
+- `tests/upstream_manifest.bats`: manifest validation regression tests.
+- `tests/upstream_tree.bats`: unsafe-tree and license regressions.
+- `tests/upstream_update.bats`: update command safety and dry-run regressions.
+- `tests/fixtures/upstreams/`: local bare repositories and malformed manifests; tests never depend on mutable network state.
+- `.github/workflows/upstream-validate.yml`: PR validation with path-aware component gates.
+- `.github/workflows/upstream-sync.yml`: scheduled/manual detection and update-PR creation.
+- `docs/upstream/OPERATIONS.md`: operator workflow and recovery.
+- `docs/upstream/LICENSES.md`: generated attribution inventory.
+- `integration/patches/README.md`: patch naming and application policy.
+- `integration/compatibility/README.md`: adapter ownership rules.
+- `Makefile`: local validation/update/inventory targets.
+- `scripts/build-release.sh` and `scripts/verify-release-artifacts.sh`: include and verify upstream inventory.
+
+### Task 1: Lock the Manifest Contract
+
+**Files:**
+- Create: `UPSTREAMS.yaml`
+- Create: `schemas/upstreams.schema.json`
+- Create: `scripts/upstream/manifest.py`
+- Create: `tests/upstream_manifest.bats`
+- Create: `tests/fixtures/upstreams/invalid-url.yaml`
+- Create: `tests/fixtures/upstreams/invalid-prefix.yaml`
+- Modify: `Makefile`
+
+**Interfaces:**
+- Produces: `load_manifest(path: pathlib.Path) -> dict`, `validate_manifest(data: dict) -> list[str]`, CLI `python3 scripts/upstream/manifest.py validate [PATH]`.
+- Manifest keys: `version`, `components[].name`, `repository`, `branch`, `prefix`, `commit`, `license.spdx`, `license.path`, `patches`, `update_policy`.
+
+- [ ] **Step 1: Write failing Bats coverage**
+
+Create tests asserting the canonical manifest validates, an unapproved GitHub URL fails with `repository is not allowlisted`, `../` in a prefix fails with `prefix must be components/{name}`, and a non-40-character lowercase hexadecimal commit fails.
+
+- [ ] **Step 2: Run the focused test**
+
+Run: `bats tests/upstream_manifest.bats`  
+Expected: FAIL because `scripts/upstream/manifest.py` does not exist.
+
+- [ ] **Step 3: Add the manifest and validator**
+
+Make `UPSTREAMS.yaml` JSON syntax so it remains valid YAML 1.2 and can be parsed with Python's `json` module without a new dependency. Initialize all four entries with their allowlisted URL, tracked default branch verified at import time, exact prefix, the explicit string `UNIMPORTED`, license fields, empty patch list, and `update_policy: pull_request`. The validator must reject `UNIMPORTED` outside the explicit `--allow-unimported` bootstrap mode.
+
+- [ ] **Step 4: Add schema and Make target**
+
+Add `upstream-manifest` to `.PHONY` and implement:
+
+```make
+upstream-manifest:
+	python3 scripts/upstream/manifest.py validate UPSTREAMS.yaml
+```
+
+- [ ] **Step 5: Verify red/green behavior**
+
+Run: `bats tests/upstream_manifest.bats && python3 scripts/upstream/manifest.py validate --allow-unimported UPSTREAMS.yaml`  
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add UPSTREAMS.yaml schemas/upstreams.schema.json scripts/upstream/manifest.py tests/upstream_manifest.bats tests/fixtures/upstreams Makefile
+git commit -m "feat(upstream): define pinned source manifest"
+```
+
+### Task 2: Enforce Tree, License, and Provenance Safety
+
+**Files:**
+- Create: `scripts/upstream/check_tree.py`
+- Create: `tests/upstream_tree.bats`
+- Create: `tests/fixtures/upstreams/safe-tree/LICENSE`
+- Create: `tests/fixtures/upstreams/escaping-link`
+- Modify: `Makefile`
+
+**Interfaces:**
+- Consumes: `load_manifest()` and `validate_manifest()`.
+- Produces CLI:
+  - `check_tree.py paths COMPONENT ROOT`
+  - `check_tree.py license COMPONENT ROOT`
+  - `check_tree.py provenance COMPONENT ROOT`
+  - `check_tree.py all COMPONENT ROOT`
+
+- [ ] **Step 1: Write failing safety tests**
+
+Cover: missing component prefix, missing declared license, absolute symlink, relative symlink escaping the prefix, clean contained symlink, unknown component, and provenance mismatch between manifest commit and the `git-subtree-split` trailer of the most recent prefix commit.
+
+- [ ] **Step 2: Confirm expected failure**
+
+Run: `bats tests/upstream_tree.bats`  
+Expected: FAIL because `check_tree.py` is absent.
+
+- [ ] **Step 3: Implement fail-closed checks**
+
+Use `pathlib.Path.resolve(strict=False)` plus `os.path.commonpath` for containment. Walk with `os.scandir` without following directory symlinks. Reject absolute links and any resolved target outside the component root. Read provenance from `git log --format=%B --max-count=1 -- <prefix>` and require exactly one `git-subtree-split: <manifest SHA>` trailer.
+
+- [ ] **Step 4: Wire the aggregate target**
+
+Add:
+
+```make
+upstream-validate: upstream-manifest
+	@for component in codex skills plugins codex-universal; do \
+		python3 scripts/upstream/check_tree.py all "$$component" .; \
+	done
+```
+
+Do not add `upstream-validate` to the existing global `validate` target until the first component import is complete.
+
+- [ ] **Step 5: Run tests and static checks**
+
+Run: `bats tests/upstream_tree.bats && python3 -m py_compile scripts/upstream/manifest.py scripts/upstream/check_tree.py`  
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add scripts/upstream/check_tree.py tests/upstream_tree.bats tests/fixtures/upstreams Makefile
+git commit -m "feat(upstream): validate tree safety and provenance"
+```
+
+### Task 3: Add Cross-Platform Update Preparation
+
+**Files:**
+- Create: `scripts/upstream/update.sh`
+- Create: `scripts/upstream/update.ps1`
+- Create: `tests/upstream_update.bats`
+- Create: `tests/fixtures/upstreams/create-local-remotes.sh`
+- Modify: `Makefile`
+
+**Interfaces:**
+- Produces identical commands on both platforms:
+  - `list`
+  - `check --component NAME`
+  - `import --component NAME --commit SHA`
+  - `update --component NAME --commit SHA`
+  - `--dry-run`
+- Exit codes: `0` success/no drift, `2` usage, `3` dirty worktree, `4` identity/commit failure, `5` subtree conflict, `6` validation failure.
+
+- [ ] **Step 1: Write failing contract tests**
+
+Using local bare remotes, assert: unknown component is rejected; dirty worktree is rejected; `--dry-run` prints but does not execute a subtree command; a commit not reachable from the configured branch is rejected; import refuses an existing prefix; update refuses a missing prefix; the command never changes `main` directly.
+
+- [ ] **Step 2: Verify failure**
+
+Run: `bats tests/upstream_update.bats`  
+Expected: FAIL because the update entry points are missing.
+
+- [ ] **Step 3: Implement Bash entry point**
+
+Use arrays for every Git command, `mktemp -d`, a trap for cleanup, `git status --porcelain=v1`, exact allowlisted remotes from the manifest, and `git merge-base --is-ancestor SHA refs/remotes/<temporary>/<branch>`. Invoke `git subtree add` or `git subtree pull` without `--squash` to preserve history. Never invoke `eval`.
+
+- [ ] **Step 4: Implement PowerShell parity**
+
+Use `[System.IO.Path]::GetFullPath`, argument arrays, `try/finally` cleanup, `$LASTEXITCODE` checks, and `& git @args`. Do not use `Invoke-Expression`. Emit the same exit codes and dry-run command representation as Bash.
+
+- [ ] **Step 5: Add local Make targets**
+
+```make
+upstream-list:
+	bash scripts/upstream/update.sh list
+
+upstream-check:
+	bash scripts/upstream/update.sh check --component "$(COMPONENT)"
+
+upstream-import:
+	bash scripts/upstream/update.sh import --component "$(COMPONENT)" --commit "$(COMMIT)"
+```
+
+- [ ] **Step 6: Verify both entry points**
+
+Run: `bats tests/upstream_update.bats && shellcheck scripts/upstream/update.sh && pwsh -NoProfile -File scripts/upstream/update.ps1 list`  
+Expected: PASS with four manifest entries printed by both implementations.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add scripts/upstream/update.sh scripts/upstream/update.ps1 tests/upstream_update.bats tests/fixtures/upstreams Makefile
+git commit -m "feat(upstream): add safe cross-platform synchronization"
+```
+
+### Task 4: Import the Four Upstreams as Independent Changes
+
+**Files:**
+- Create: `components/codex/**`
+- Create: `components/skills/**`
+- Create: `components/plugins/**`
+- Create: `components/codex-universal/**`
+- Modify: `UPSTREAMS.yaml`
+- Create: `integration/patches/README.md`
+- Create: `integration/compatibility/README.md`
+
+**Interfaces:**
+- Consumes: update commands and validators from Tasks 1–3.
+- Produces: four subtree prefixes whose latest import commits carry `git-subtree-dir` and `git-subtree-split` trailers matching the manifest.
+
+- [ ] **Step 1: Record immutable candidate SHAs**
+
+ before importing.
 
 - [ ] **Step 2: Import `openai/codex`**
 
-Run: `bash scripts/upstream/update.sh import --component codex --commit <recorded-codex-sha>`  
+Run: `bash scripts/upstream/update.sh import --component codex --commit "$CODEX_SHA"`  
 Expected: `components/codex` exists, its license validates, and `UPSTREAMS.yaml` pins the recorded SHA.
 
 Commit only this component:
@@ -257,7 +488,7 @@ Use the same verified flow for `codex-universal`, then commit only `components/c
 
 - [ ] **Step 6: Establish local-change policy**
 
-Document patch filenames as `NNNN-<component>-<summary>.patch`, require a metadata header containing upstream base SHA and purpose, and require adapters to expose their supported component SHA ranges.
+Document patch filenames as `NNNN-{component}-{summary}.patch`, require a metadata header containing upstream base SHA and purpose, and require adapters to expose their supported component SHA ranges.
 
 - [ ] **Step 7: Run the aggregate gate**
 
@@ -354,9 +585,9 @@ git commit -m "ci: validate pinned upstream components"
 
 **Interfaces:**
 - Workflow inputs: optional `component` enum and `dry_run` boolean.
-- Branch format: `automation/upstream-<component>-<12-char-sha>`.
-- PR title: `vendor(<component>): update upstream to <12-char-sha>`.
-- Labels: `dependencies`, `upstream-sync`, `<component>`.
+- Branch format: `automation/upstream-{component}-{12-char-sha}`.
+- PR title: `vendor({component}): update upstream to {12-char-sha}`.
+- Labels: `dependencies`, `upstream-sync`, `{component}`.
 
 - [ ] **Step 1: Write failing least-privilege tests**
 
