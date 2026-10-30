@@ -26,6 +26,7 @@ def main() -> int:
         'GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"',
         "pull-requests: read",
         "security-events: write",
+        "github.actor != 'dependabot[bot]'",
         "--read-only",
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
