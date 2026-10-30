@@ -1,41 +1,100 @@
 name: security
+
 on:
   push:
   pull_request:
-  schedule: [{ cron: '0 3 * * *' }]
+  schedule:
+    - cron: "0 3 * * *"
+
 permissions:
   contents: read
-  security-events: write
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: security-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 defaults:
-  run: { shell: bash }
+  run:
+    shell: bash
+
 jobs:
-  scan:
+  gitleaks:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0, persist-credentials: false }
-      - uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: |
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate security workflow policy
+        run: python3 tests/security_workflow_policy.py
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  semgrep:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate security workflow policy
+        run: python3 tests/security_workflow_policy.py
+
+      - name: Run Semgrep in pinned container
+        run: |
           set -Eeuo pipefail
-          python -m pip install --upgrade pip
-          pip install semgrep==1.123.0
-          semgrep scan --config auto --sarif --output semgrep.sarif . || true
-      - uses: github/codeql-action/upload-sarif@v3
-        with: { sarif_file: semgrep.sarif }
-      - if: always()
+          docker run --rm \
+            --read-only \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=1g \
+            --env HOME=/tmp \
+            --env XDG_CACHE_HOME=/tmp/.cache \
+            --volume "$GITHUB_WORKSPACE:/src" \
+            --workdir /src \
+            semgrep/semgrep@sha256:451b3d875c00dac7ed5db5293e584a07de11449a409c10b3c2d2652f429630b6 \
+            semgrep scan --config auto --sarif --output semgrep.sarif --metrics=off .
+          test -s semgrep.sarif
+
+      - name: Upload Semgrep SARIF
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Security summary
+        if: always()
         run: |
           set -Eeuo pipefail
           echo "## Security Summary" >> "$GITHUB_STEP_SUMMARY"
-      - if: failure()
-        uses: actions/upload-artifact@v4
+          if [ -s semgrep.sarif ]; then
+            echo "- Semgrep SARIF: generated" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Semgrep SARIF: not generated" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload security debug artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: security-debug-${{ github.run_id }}
           if-no-files-found: ignore
